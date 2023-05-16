@@ -5,6 +5,14 @@
 
 int main()
 {
-    
-    std::cout << "hello world fjj hahahaah" << std::endl;
+    std::string inputFilePath = "";
+    std::string outputFilePath = "";
+
+    Configuration cfg;
+    cfg.input_dir = inputFilePath;
+    cfg.output_dir = outputFilePath;
+    cfg.encode_quality = 95;
+
+    std::cout << "hello world" << std::endl;
+    return 0;
 }

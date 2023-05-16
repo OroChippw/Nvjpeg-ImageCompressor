@@ -229,6 +229,11 @@ double NvjpegCompressRunnerImpl::CalculatePSNR(cv::Mat srcImage , cv::Mat compIm
     }
 }
 
+cv::Mat ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2)
+{
+    cv::Mat ConstructedImage = Image1 + Image2;
+    return ConstructedImage;
+}
 
 std::vector<cv::Mat> NvjpegCompressRunnerImpl::CompressSingleImage(Configuration cfg)
 {

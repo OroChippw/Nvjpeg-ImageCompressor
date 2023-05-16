@@ -46,7 +46,7 @@ public:
     void CalculateDiffmap(const cv::Mat& srcImage , const cv::Mat& compImage);
     /* 通过压缩图还原原图 */
     void ReconstructedImage(const std::string Image1 , const std::string Image2);
-    void ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2);
+    cv::Mat ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2);
 
 public:
     std::vector<cv::Mat> CompressSingleImage(Configuration cfg);
