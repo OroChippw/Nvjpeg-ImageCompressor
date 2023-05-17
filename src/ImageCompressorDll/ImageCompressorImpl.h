@@ -1,3 +1,6 @@
+#pragma once
+
+#include <iostream>
 #include <opencv2/core.hpp>
 #include <nvjpeg.h>
 
@@ -35,21 +38,21 @@ private:
     double CalculatePSNR(cv::Mat srcImage , cv::Mat compImage);
 
 public:
-    NvjpegCompressRunnerImpl() = default;
+    NvjpegCompressRunnerImpl() {};
     ~NvjpegCompressRunnerImpl() {};
 
 public:
     int ReadInput(const std::string input_path);
-    int Compress(Configuration cfg);
+    int Compress(CompressConfiguration cfg);
     /* 计算原图和压缩图的差异图 */
-    cv::Mat CalculateDiffmap(const std::string srcImagePath , const std::string compImagePath , bool showinfo = false);
-    void CalculateDiffmap(const cv::Mat& srcImage , const cv::Mat& compImage);
+    cv::Mat CalculateDiffmap(const std::string srcImagePath , const std::string compImagePath , bool showinfo);
+    // void CalculateDiffmap(const cv::Mat& srcImage , const cv::Mat& compImage);
     /* 通过压缩图还原原图 */
-    void ReconstructedImage(const std::string Image1 , const std::string Image2);
+    // void ReconstructedImage(const std::string Image1 , const std::string Image2);
     cv::Mat ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2);
 
 public:
-    std::vector<cv::Mat> CompressSingleImage(Configuration cfg);
+    int CompressSingleImage(CompressConfiguration cfg);
     double CalculateDiffImagePSNR(const std::string ImagePath1 , const std::string ImagePath2);
 
 
