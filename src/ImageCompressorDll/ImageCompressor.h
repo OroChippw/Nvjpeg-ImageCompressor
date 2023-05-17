@@ -2,7 +2,7 @@
 #include <iostream>
 #include "CompressConfig.h"
 
-#ifdef NVJPEGCOMPRESSRUNNER_EXPORTS
+#ifdef NVJPEG_COMPRESS_RUNNER_EXPORTS
 #define NVJPEG_COMPRESS_RUNNER_API __declspec(dllexport)
 #else
 #define NVJPEG_COMPRESS_RUNNER_API __declspec(dllimport)
@@ -13,7 +13,7 @@
 
 class NvjpegCompressRunnerImpl;
 
-class NvjpegCompressRunner{
+class NVJPEG_COMPRESS_RUNNER_API NvjpegCompressRunner{
 private:
     NvjpegCompressRunnerImpl* compressor;
 
