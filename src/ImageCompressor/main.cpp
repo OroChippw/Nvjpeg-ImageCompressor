@@ -6,20 +6,19 @@
 
 int main()
 {
-    std::string inputFilePath = "";
-    std::string outputFilePath = "";
+    std::string inputFilePath = "..//data//org";
+    std::string outputFilePath = "..//data//result";
 
     CompressConfiguration cfg;
     cfg.input_dir = inputFilePath;
     cfg.output_dir = outputFilePath;
     cfg.encode_quality = 95;
+    cfg.use_optimizedHuffman = true;
+    cfg.multi_stage = true;
+    cfg.show_diff_info = false;
 
     NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
-    // compressor->compress(cfg);
+    compressor->compress(cfg);
     
-
-    
-
-    std::cout << "hello world" << std::endl;
     return 0;
 }

@@ -18,5 +18,6 @@ NvjpegCompressRunner::~NvjpegCompressRunner()
 
 void NvjpegCompressRunner::compress(CompressConfiguration cfg)
 {
-    compressor->CompressSingleImage(cfg);
+    std::string run_state = compressor->CompressImage(cfg) ? "Failure" : "Finish";
+    std::cout << "=> Compress " << run_state << std::endl;
 }

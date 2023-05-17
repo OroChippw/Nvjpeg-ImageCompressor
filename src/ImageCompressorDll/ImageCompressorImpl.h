@@ -31,7 +31,7 @@ class NvjpegCompressRunnerImpl
 {
 private:
     cv::Mat compress_image;
-    std::vector<std::string> file_lists;
+    std::vector<std::string> files_list;
 
 private:
     /* 通过和原图对比计算均方误差和峰值信噪比以评估图像质量 */
@@ -52,7 +52,7 @@ public:
     cv::Mat ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2);
 
 public:
-    int CompressSingleImage(CompressConfiguration cfg);
+    int CompressImage(CompressConfiguration cfg);
     double CalculateDiffImagePSNR(const std::string ImagePath1 , const std::string ImagePath2);
 
 

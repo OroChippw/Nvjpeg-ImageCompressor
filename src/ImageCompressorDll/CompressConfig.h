@@ -10,4 +10,5 @@ struct CompressConfiguration {
     int encode_quality = 95; 
     bool use_optimizedHuffman = true; 
     bool multi_stage = false;
+    bool show_diff_info = false;
 };
