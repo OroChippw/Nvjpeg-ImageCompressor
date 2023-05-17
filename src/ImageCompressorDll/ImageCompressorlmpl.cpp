@@ -8,14 +8,15 @@
 
 
 int NvjpegCompressRunnerImpl::ReadInput(const std::string input_path)
-{
+{   
+    std::cout << "=> Start ReadInput and build file lists ..." << std::endl;
     struct stat s;
     int error_code = 1;
     if(stat(input_path.c_str() , &s) == 0)
     {
         if(s.st_mode & S_IFREG)
         {
-            file_lists.emplace_back(input_path.c_str());
+            files_list.emplace_back(input_path.c_str());
         }else if(s.st_mode & S_IFDIR)
         {
             struct dirent* dir;
@@ -28,7 +29,7 @@ int NvjpegCompressRunnerImpl::ReadInput(const std::string input_path)
                     if(dir->d_type == DT_REG)
                     {
                         std::string filename = input_path + "\\" + dir->d_name;
-                        file_lists.emplace_back(filename);
+                        files_list.emplace_back(filename);
                     }else if(dir->d_type == DT_DIR)
                     {
                         std::string sname = dir->d_name;
@@ -42,15 +43,17 @@ int NvjpegCompressRunnerImpl::ReadInput(const std::string input_path)
             }else
             {
                 std::cout << "Can not open input directory : " << input_path << std::endl;
-                return error_code;
+                return EXIT_FAILURE;
             }
         }else
         {
             std::cout << "Cannot find input path " << input_path << std::endl;
-            return error_code;
+            return EXIT_FAILURE;
         }
     }
-    return 0;
+    std::cout << "Build file lists successfully ..." << std::endl;
+    std::cout << "Files list num : " << files_list.size() << std::endl;
+    return EXIT_SUCCESS;
 }
 
 
@@ -89,81 +92,92 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
     int stage_num = cfg.multi_stage ? 2 : 1;
 
     std::cout << "# ----------------------------------------------- #" << std::endl;
-    for(unsigned int index = 0 ; index < file_lists.size() ; index++)
+    for(unsigned int index = 0 ; index < files_list.size() ; index++)
     {
-        std::cout << "=> Processing: " << file_lists[index] << std::endl;
-        cv::Mat srcImage = cv::imread(file_lists[index], cv::IMREAD_COLOR);
-        const unsigned int image_width = srcImage.cols;
-        const unsigned int image_height = srcImage.rows;
-        const unsigned int channel_size = image_width * image_height;
-        std::cout << "[IMAGE INFO] width : "<< image_width << " height : " << image_height << std::endl;
-
-        std::vector<cv::Mat> channels_list;
-        cv::split(srcImage, channels_list);
-        for (int i = 0; i < channels_list.size(); i++) 
+        std::cout << "=> Processing: " << files_list[index] << std::endl;
+        std::string stage1_diffmap_path;
+        for(unsigned int stage_index = 0 ; stage_index < stage_num ; stage_index++)
         {
-            input.pitch[i] = image_width;
-            CHECK_CUDA(cudaMalloc((void**)&(input.channel[i]), channel_size));
-            size_t inputSize = channels_list[i].total() * channels_list[i].elemSize();
-            CHECK_CUDA(cudaMemcpy((void*)input.channel[i], channels_list[i].ptr(0), inputSize, cudaMemcpyHostToDevice));
+            std::string image_path = files_list[index];
+            if (stage_index == 1)
+            {
+                image_path = stage1_diffmap_path;
+                std::cout << "=> Enter secondary compression stage 2 ..." << std::endl;
+            }
+            cv::Mat srcImage = cv::imread(image_path , cv::IMREAD_COLOR);
+            const unsigned int image_width = srcImage.cols;
+            const unsigned int image_height = srcImage.rows;
+            const unsigned int channel_size = image_width * image_height;
+            std::cout << "[IMAGE INFO] width : "<< image_width << " height : " << image_height << std::endl;
+
+            std::vector<cv::Mat> channels_list;
+            cv::split(srcImage, channels_list);
+            for (int i = 0; i < channels_list.size(); i++) 
+            {
+                input.pitch[i] = image_width;
+                CHECK_CUDA(cudaMalloc((void**)&(input.channel[i]), channel_size));
+                size_t inputSize = channels_list[i].total() * channels_list[i].elemSize();
+                CHECK_CUDA(cudaMemcpy((void*)input.channel[i], channels_list[i].ptr(0), inputSize, cudaMemcpyHostToDevice));
+            }
+
+            CHECK_CUDA(cudaEventRecord(ev_start));
+            CHECK_NVJPEG(nvjpegEncodeImage(nvjpeg_handle, encoder_state, encoder_params, &input, input_format, 
+                image_width, image_height, NULL));
+            CHECK_CUDA(cudaEventRecord(ev_end));
+
+            std::vector<unsigned char> obuffer;
+            size_t length;
+            /* 从先前在其中一个编码器功能中使用的编码器状态中检索压缩流，如果数据参数data为NULL，则编码器将在长度参数中返回压缩流大小 */
+            CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(nvjpeg_handle, encoder_state, NULL, &length, NULL));
+            /* 先返回压缩流的长度 再用压缩流长度大小的buffer接受压缩流 */
+
+            obuffer.resize(length);
+            CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(nvjpeg_handle, encoder_state, obuffer.data(), &length, NULL));
+
+            cudaEventSynchronize(ev_end);
+
+            for (int i = 0; i < channels_list.size(); i++) 
+            {
+                cudaFree(input.channel[i]);
+            }
+
+            float ms = 0.0;
+            cudaEventElapsedTime(&ms, ev_start, ev_end);
+            std::cout << "=> Cost time : " << ms << "ms" << std::endl;
+            time_total += ms;
+
+            std::string::size_type iPos = files_list[index].find_last_of('\\') + 1;
+
+            std::string filename = files_list[index].substr(iPos, files_list[index].length() - iPos);
+            std::string name = filename.substr(0, filename.find("."));
+            std::string savedir = cfg.output_dir + "\\" + name;
+            if (!std::filesystem::exists(savedir))
+            {
+                std::filesystem::create_directories(savedir);
+            }
+            std::string compress_result_name = (stage_index != 0) ? "D.png" : "B.png";
+            std::string output_result_path = savedir + "\\" + compress_result_name ;
+            std::ofstream outputFile(output_result_path, std::ios::out | std::ios::binary);
+            outputFile.write(reinterpret_cast<const char*>(obuffer.data()), static_cast<int>(length));
+            outputFile.close();
+            std::cout << "Save compress result as : " << output_result_path << std::endl;
+
+            if (stage_index != 0) {continue;} // 当进行二次压缩时不再需要计算差异图
+
+            cv::Mat compressImage = cv::imread(output_result_path , cv::IMREAD_ANYCOLOR);
+            /* 计算输入图和压缩图的峰值信噪比 */
+            psnr_val_score += CalculateDiffImagePSNR(files_list[index], output_result_path);
+            cv::Mat diffmap = CalculateDiffmap(files_list[index] ,output_result_path , cfg.show_diff_info);
+            std::string output_diffmap_path = savedir + "\\" + "C.png" ;
+            cv::imwrite(output_diffmap_path , diffmap);
+            stage1_diffmap_path = output_diffmap_path;
+            std::cout << "Save diffmap result as : " << output_diffmap_path << std::endl;
         }
-
-        CHECK_CUDA(cudaEventRecord(ev_start));
-        CHECK_NVJPEG(nvjpegEncodeImage(nvjpeg_handle, encoder_state, encoder_params, &input, input_format, 
-            image_width, image_height, NULL));
-        CHECK_CUDA(cudaEventRecord(ev_end));
-
-        std::vector<unsigned char> obuffer;
-        size_t length;
-        /* 从先前在其中一个编码器功能中使用的编码器状态中检索压缩流，如果数据参数data为NULL，则编码器将在长度参数中返回压缩流大小 */
-        CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(nvjpeg_handle, encoder_state, NULL, &length, NULL));
-        /* 先返回压缩流的长度 再用压缩流长度大小的buffer接受压缩流 */
-
-        obuffer.resize(length);
-        CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(nvjpeg_handle, encoder_state, obuffer.data(), &length, NULL));
-
-        cudaEventSynchronize(ev_end);
-
-        for (int i = 0; i < channels_list.size(); i++) 
-        {
-            cudaFree(input.channel[i]);
-        }
-
-        float ms = 0.0;
-        cudaEventElapsedTime(&ms, ev_start, ev_end);
-        std::cout << "=> Cost time : " << ms << "ms" << std::endl;
-        time_total += ms;
-
-        std::string::size_type iPos = file_lists[index].find_last_of('\\') + 1;
-
-        std::string filename = file_lists[index].substr(iPos, file_lists[index].length() - iPos);
-        std::string name = filename.substr(0, filename.find("."));
-        std::string savedir = cfg.output_dir + "\\" + filename;
-        if (!std::filesystem::exists(savedir))
-        {
-            std::filesystem::create_directories(savedir);
-        }
-        std::string outputfile_path_B = savedir + "\\" + "B.png" ;
-        std::ofstream outputFile(outputfile_path_B, std::ios::out | std::ios::binary);
-        outputFile.write(reinterpret_cast<const char*>(obuffer.data()), static_cast<int>(length));
-        outputFile.close();
-        std::cout << "Save compress result as : " << outputfile_path_B << std::endl;
-
-        cv::Mat compressImage = cv::imread(outputfile_path_B , cv::IMREAD_ANYCOLOR);
-
-        /* 计算输入图和压缩图的峰值信噪比 */
-        psnr_val_score += CalculateDiffImagePSNR(file_lists[index], outputfile_path_B);
-        cv::Mat diffmap = CalculateDiffmap(file_lists[index] ,outputfile_path_B , false);
-        std::string outputfile_path_C = savedir + "\\" + "C.png" ;
-        cv::imwrite(outputfile_path_C , diffmap);
-        std::cout << "Save compress result as : " << outputfile_path_C << std::endl;
-
-
     }
 
     std::cout << "# ----------------------------------------------- #" << std::endl;
-    std::cout << file_lists.size() << " Images mean Cost time : " << time_total / file_lists.size() << "ms" << std::endl;
-    std::cout << file_lists.size() << " Images mean PSNR  : " << psnr_val_score / file_lists.size() << "dB" << std::endl;
+    std::cout << files_list.size() << " Images mean Cost time : " << time_total / files_list.size() << "ms" << std::endl;
+    std::cout << files_list.size() << " Images mean PSNR  : " << psnr_val_score / files_list.size() << "dB" << std::endl;
 
     nvjpegEncoderParamsDestroy(encoder_params);
     nvjpegEncoderStateDestroy(encoder_state);
@@ -223,9 +237,8 @@ double NvjpegCompressRunnerImpl::CalculatePSNR(cv::Mat srcImage , cv::Mat compIm
     }else
     {
         double mse = sse / h / w;
-        std::cout << "[VAL]->MSE : " << mse << std::endl;
         double psnr = 10 * log10(pow(max , 2) / mse);
-        std::cout << "[VAL]->PSNR : " << psnr << std::endl;
+        std::cout << "[VAL->MSE] : " << mse << " [VAL->PSNR] : " << psnr << std::endl;
         return psnr;
     }
 }
@@ -236,9 +249,15 @@ cv::Mat ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2)
     return ConstructedImage;
 }
 
-int NvjpegCompressRunnerImpl::CompressSingleImage(CompressConfiguration cfg)
+int NvjpegCompressRunnerImpl::CompressImage(CompressConfiguration cfg)
 {
-    return 0;
+    int read_state = ReadInput(cfg.input_dir);
+    std::cout << "=> Start image compression ... " <<std::endl;
+    if(Compress(cfg))
+    {
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }
 
 double NvjpegCompressRunnerImpl::CalculateDiffImagePSNR(const std::string ImagePath1 , const std::string ImagePath2)
