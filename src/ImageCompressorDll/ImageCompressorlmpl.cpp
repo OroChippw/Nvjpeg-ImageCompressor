@@ -1,3 +1,5 @@
+#pragma warning (disable:4819)
+
 #include <iostream>
 #include <fstream>
 #include <filesystem>
