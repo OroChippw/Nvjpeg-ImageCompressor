@@ -54,7 +54,7 @@ int NvjpegCompressRunnerImpl::ReadInput(const std::string input_path)
 }
 
 
-int NvjpegCompressRunnerImpl::Compress(Configuration cfg)
+int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
 {
     nvjpegHandle_t nvjpeg_handle;
     nvjpegEncoderState_t encoder_state; // 存储用于压缩中间缓冲区和变量的结构体
@@ -99,8 +99,8 @@ int NvjpegCompressRunnerImpl::Compress(Configuration cfg)
         std::cout << "[IMAGE INFO] width : "<< image_width << " height : " << image_height << std::endl;
 
         std::vector<cv::Mat> channels_list;
-        cv::split(image, channels_list);
-        for (int i = 0; i < channels_listchannels_list.size(); i++) 
+        cv::split(srcImage, channels_list);
+        for (int i = 0; i < channels_list.size(); i++) 
         {
             input.pitch[i] = image_width;
             CHECK_CUDA(cudaMalloc((void**)&(input.channel[i]), channel_size));
@@ -113,17 +113,18 @@ int NvjpegCompressRunnerImpl::Compress(Configuration cfg)
             image_width, image_height, NULL));
         CHECK_CUDA(cudaEventRecord(ev_end));
 
+        std::vector<unsigned char> obuffer;
+        size_t length;
         /* 从先前在其中一个编码器功能中使用的编码器状态中检索压缩流，如果数据参数data为NULL，则编码器将在长度参数中返回压缩流大小 */
         CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(nvjpeg_handle, encoder_state, NULL, &length, NULL));
         /* 先返回压缩流的长度 再用压缩流长度大小的buffer接受压缩流 */
-        std::vector<unsigned char> obuffer;
-        size_t length;
+
         obuffer.resize(length);
         CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(nvjpeg_handle, encoder_state, obuffer.data(), &length, NULL));
 
         cudaEventSynchronize(ev_end);
 
-        for (int i = 0; i < channels_listchannels_list.size(); i++) 
+        for (int i = 0; i < channels_list.size(); i++) 
         {
             cudaFree(input.channel[i]);
         }
@@ -152,7 +153,7 @@ int NvjpegCompressRunnerImpl::Compress(Configuration cfg)
 
         /* 计算输入图和压缩图的峰值信噪比 */
         psnr_val_score += CalculateDiffImagePSNR(file_lists[index], outputfile_path_B);
-        cv::Mat diffmap = CalculateDiffmap(file_lists[index] ,outputfile_path_B);
+        cv::Mat diffmap = CalculateDiffmap(file_lists[index] ,outputfile_path_B , false);
         std::string outputfile_path_C = savedir + "\\" + "C.png" ;
         cv::imwrite(outputfile_path_C , diffmap);
         std::cout << "Save compress result as : " << outputfile_path_C << std::endl;
@@ -171,7 +172,7 @@ int NvjpegCompressRunnerImpl::Compress(Configuration cfg)
     return EXIT_SUCCESS;
 }
 
-cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(const std::string srcImagePath , const std::string compImagePath , bool showinfo = false)
+cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(const std::string srcImagePath , const std::string compImagePath , bool showinfo)
 {
     cv::Mat srcImage = cv::imread(srcImagePath, cv::IMREAD_ANYCOLOR);
     cv::Mat compressImage = cv::imread(compImagePath, cv::IMREAD_ANYCOLOR);
@@ -181,11 +182,11 @@ cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(const std::string srcImagePat
     {
         double minVal, maxVal;
         cv::Point minIdx, maxIdx;
-        std::vector<cv::Mat> channels_list;
-        cv::split(diffMap, channels_list);
+        std::vector<cv::Mat> img_channels;
+        cv::split(diffMap, img_channels);
 
         /* 计算差异图像素最大值、最小值、均值以及标准差 */
-        for (int index = 0; index < channels_list.size(); index++) {
+        for (int index = 0; index < img_channels.size(); index++) {
         cv::minMaxLoc(img_channels[index], &minVal, &maxVal, &minIdx, &maxIdx);
         std::cout << "diffMap[" << index << "] minVal : " << minVal << " , minIdx : " << minIdx << std::endl;
         std::cout << "diffMap[" << index << "] maxVal : " << maxVal << " , maxIdx : " << maxIdx << std::endl;
@@ -235,9 +236,9 @@ cv::Mat ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2)
     return ConstructedImage;
 }
 
-std::vector<cv::Mat> NvjpegCompressRunnerImpl::CompressSingleImage(Configuration cfg)
+int NvjpegCompressRunnerImpl::CompressSingleImage(CompressConfiguration cfg)
 {
-
+    return 0;
 }
 
 double NvjpegCompressRunnerImpl::CalculateDiffImagePSNR(const std::string ImagePath1 , const std::string ImagePath2)

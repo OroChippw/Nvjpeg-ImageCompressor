@@ -1,5 +1,4 @@
 #pragma once
-
 #include <iostream>
 #include "CompressConfig.h"
 
@@ -9,16 +8,19 @@
 #define NVJPEG_COMPRESS_RUNNER_API __declspec(dllimport)
 #endif
 
-class NvjpegCompressRunnerImpl
 
-class NVJPEG_COMPRESS_RUNNER_API NvjpegCompressRunner{
+#pragma warning(push)
+
+class NvjpegCompressRunnerImpl;
+
+class NvjpegCompressRunner{
 private:
     NvjpegCompressRunnerImpl* compressor;
 
 public:
     NvjpegCompressRunner();
     ~NvjpegCompressRunner();
-    void compress(Configuration cfg);
+    void compress(CompressConfiguration cfg);
 };
 
 #pragma warning(pop)
