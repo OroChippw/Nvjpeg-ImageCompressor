@@ -97,16 +97,31 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
     for(unsigned int index = 0 ; index < files_list.size() ; index++)
     {
         std::cout << "=> Processing: " << files_list[index] << std::endl;
-        std::string stage1_diffmap_path;
+        std::string::size_type iPos = files_list[index].find_last_of('\\') + 1;
+        std::string filename = files_list[index].substr(iPos, files_list[index].length() - iPos);
+        std::string name = filename.substr(0, filename.find("."));
+        std::string savedir = cfg.output_dir + "\\" + name;
+        if (!std::filesystem::exists(savedir))
+        {
+            std::filesystem::create_directories(savedir);
+        }
+
+        cv::Mat diffmap;
+
         for(unsigned int stage_index = 0 ; stage_index < stage_num ; stage_index++)
         {
             std::string image_path = files_list[index];
-            if (stage_index == 1)
+            
+            cv::Mat srcImage;
+            if (stage_index == 0)
             {
-                image_path = stage1_diffmap_path;
+                srcImage = cv::imread(image_path , cv::IMREAD_COLOR);
+                std::cout << "=> Enter secondary compression stage 1 ..." << std::endl;
+            }else
+            {
+                srcImage = diffmap;
                 std::cout << "=> Enter secondary compression stage 2 ..." << std::endl;
             }
-            cv::Mat srcImage = cv::imread(image_path , cv::IMREAD_COLOR);
             const unsigned int image_width = srcImage.cols;
             const unsigned int image_height = srcImage.rows;
             const unsigned int channel_size = image_width * image_height;
@@ -134,6 +149,7 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
             /* 先返回压缩流的长度 再用压缩流长度大小的buffer接受压缩流 */
 
             obuffer.resize(length);
+            // std::cout << "Resize outbuffer length : " << length << std::endl;
             CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(nvjpeg_handle, encoder_state, obuffer.data(), &length, NULL));
 
             cudaEventSynchronize(ev_end);
@@ -148,32 +164,55 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
             std::cout << "=> Cost time : " << ms << "ms" << std::endl;
             time_total += ms;
 
-            std::string::size_type iPos = files_list[index].find_last_of('\\') + 1;
-
-            std::string filename = files_list[index].substr(iPos, files_list[index].length() - iPos);
-            std::string name = filename.substr(0, filename.find("."));
-            std::string savedir = cfg.output_dir + "\\" + name;
-            if (!std::filesystem::exists(savedir))
-            {
-                std::filesystem::create_directories(savedir);
-            }
-            std::string compress_result_name = (stage_index != 0) ? "D.png" : "B.png";
-            std::string output_result_path = savedir + "\\" + compress_result_name ;
+            std::string compress_result_name = (stage_index != 0) ? "D" : "B";
+ 
+            std::string output_result_path = savedir + "\\" + compress_result_name + ".png";
             std::ofstream outputFile(output_result_path, std::ios::out | std::ios::binary);
             outputFile.write(reinterpret_cast<const char*>(obuffer.data()), static_cast<int>(length));
             outputFile.close();
-            std::cout << "Save compress result as : " << output_result_path << std::endl;
+            std::cout << "Save compress mat result as : " << output_result_path << std::endl;
+        
+            if(cfg.save_binary)
+            {
+                std::string output_result_bin_path = savedir + "\\" + compress_result_name + ".bin";
+                std::ofstream outputBinFile(output_result_bin_path, std::ios::out | std::ios::binary);
+                outputBinFile.write(reinterpret_cast<const char*>(obuffer.data()), static_cast<int>(length));
+                outputBinFile.close();
+                std::cout << "Save compress bin result as : " << output_result_bin_path << std::endl;
+            }
 
-            if (stage_index != 0) {continue;} // 当进行二次压缩时不再需要计算差异图
+            /* 当进行二次压缩时不再需要计算差异图 */
+            if (stage_index != 0) 
+            {
+                if(!cfg.save_mat)
+                {
+                    if(remove(output_result_path.c_str()) == 0)
+                    {
+                        std::cout << "Delete stage 2 compress mat successfully" << std::endl;
+                    }
+                }
+                continue;
+            } 
 
-            cv::Mat compressImage = cv::imread(output_result_path , cv::IMREAD_ANYCOLOR);
             /* 计算输入图和压缩图的峰值信噪比 */
-            psnr_val_score += CalculateDiffImagePSNR(files_list[index], output_result_path);
-            cv::Mat diffmap = CalculateDiffmap(files_list[index] ,output_result_path , cfg.show_diff_info);
-            std::string output_diffmap_path = savedir + "\\" + "C.png" ;
-            cv::imwrite(output_diffmap_path , diffmap);
-            stage1_diffmap_path = output_diffmap_path;
-            std::cout << "Save diffmap result as : " << output_diffmap_path << std::endl;
+            if (cfg.do_val)
+            {
+                psnr_val_score += CalculateDiffImagePSNR(files_list[index], output_result_path);
+            }
+            diffmap = CalculateDiffmap(files_list[index] ,output_result_path , cfg.show_diff_info);
+
+            /* 如果想要保存一次压缩的差异图，解开以下注释 */
+            // std::string output_diffmap_path = savedir + "\\" + "C.png" ;
+            // cv::imwrite(output_diffmap_path , diffmap);
+            // std::cout << "Save diffmap result as : " << output_diffmap_path << std::endl;
+
+            if(!cfg.save_mat)
+            {
+                if(remove(output_result_path.c_str()) == 0)
+                {
+                    std::cout << "Delete stage 1 compress mat successfully" << std::endl;
+                }
+            }
         }
     }
 
@@ -245,7 +284,7 @@ double NvjpegCompressRunnerImpl::CalculatePSNR(cv::Mat srcImage , cv::Mat compIm
     }
 }
 
-cv::Mat ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2)
+cv::Mat NvjpegCompressRunnerImpl::Reconstructed(cv::Mat Image1 , cv::Mat Image2)
 {
     cv::Mat ConstructedImage = Image1 + Image2;
     return ConstructedImage;
@@ -270,4 +309,67 @@ double NvjpegCompressRunnerImpl::CalculateDiffImagePSNR(const std::string ImageP
     double psnr = CalculatePSNR(image1 , image2);
 
     return psnr;
+}
+
+cv::Mat NvjpegCompressRunnerImpl::Binaryfile2Mat(CompressConfiguration cfg , std::string ImagePath)
+{
+    cv::Mat Image;
+   
+    FILE* pfile = fopen(ImagePath.c_str() , "rb");
+    if (pfile == NULL)
+    {
+        return Image;
+    }
+    
+    fseek(pfile , 0 , SEEK_END);
+    const unsigned int length = ftell(pfile);
+    fseek(pfile, 0, SEEK_SET);
+    if (length <= 0)
+    {
+        fclose(pfile);
+        return Image;
+    }
+    unsigned char* pre_image = new unsigned char[length];
+    size_t data = fread(pre_image, 1, length, pfile);
+    fclose(pfile);
+    
+    std::vector<unsigned char> buffer(pre_image, pre_image + data);
+    Image = imdecode(buffer , cv::IMREAD_ANYCOLOR);
+
+    delete[]pre_image;
+   
+    return Image;
+}
+
+int NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg , std::string ImagePath1 , std::string ImagePath2)
+{
+    std::cout << "=> Start image reconstruction ... " <<std::endl;
+    struct stat buffer;
+    if (!((stat(ImagePath1.c_str() , &buffer) == 0) && (stat(ImagePath2.c_str() , &buffer) == 0)))
+    {
+        return EXIT_FAILURE;
+    }
+
+    std::string file_format = ImagePath1.substr(ImagePath1.find_last_of('.') + 1);//获取文件后缀
+
+    cv::Mat image_b;
+    cv::Mat image_d;
+    
+    if (file_format == "bin")
+    {
+        image_b = Binaryfile2Mat(cfg , ImagePath1);
+        image_d = Binaryfile2Mat(cfg , ImagePath2);
+    }else if (file_format == "jpg" || file_format == "png")
+    {
+        image_b = cv::imread(ImagePath1 , cv::IMREAD_COLOR);
+        image_d = cv::imread(ImagePath2 , cv::IMREAD_COLOR);
+    }
+    if(image_b.empty() || image_d.empty()) {return EXIT_FAILURE;}
+    cv::Mat resultImage = Reconstructed(image_b , image_d);
+    std::string output_result_path = cfg.rebuild_dir + "\\E.png";
+    cv::imwrite(output_result_path , resultImage);
+    std::cout << "Save reconstructed mat result as : " << output_result_path << std::endl;
+
+
+    return EXIT_SUCCESS;
 }

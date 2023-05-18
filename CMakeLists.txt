@@ -23,9 +23,10 @@ set(NVJPEG_LIB nvjpeg cublas cuda cudadevrt cudart_static)
 set(OPENCV_DIR  ${CMAKE_SOURCE_DIR}/third_party/opencv4)
 include_directories(${OPENCV_DIR}/include)
 link_directories("${OPENCV_DIR}/lib")
-# set(OPENCV_LIB opencv_world470d)
-set(OPENCV_LIB opencv_world470)
+set(OPENCV_LIB opencv_world470d)
+# set(OPENCV_LIB opencv_world470)
 
+include_directories("src/ImageCompressorDll")
 
 # compile own file
 file(GLOB SRC_LIST 
@@ -40,7 +41,7 @@ target_link_libraries(demo ${OPENCV_LIB} ${NVJPEG_LIB})
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 # build static library [*.lib/*.a]
-add_library(nvjpeg_compressor_static STATIC ${SRC_LIST})
+add_library(nvjpeg_compressor_static ${SRC_LIST})
 
 set_target_properties(
     nvjpeg_compressor_static PROPERTIES 

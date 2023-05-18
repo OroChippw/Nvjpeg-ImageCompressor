@@ -47,21 +47,13 @@ public:
     int Compress(CompressConfiguration cfg);
     /* 计算原图和压缩图的差异图 */
     cv::Mat CalculateDiffmap(const std::string srcImagePath , const std::string compImagePath , bool showinfo);
-    // void CalculateDiffmap(const cv::Mat& srcImage , const cv::Mat& compImage);
     /* 通过压缩图还原原图 */
-    // void ReconstructedImage(const std::string Image1 , const std::string Image2);
-    cv::Mat ReconstructedImage(const cv::Mat& Image1 , const cv::Mat& Image2);
+    cv::Mat Reconstructed(cv::Mat Image1 , cv::Mat Image2);
+    cv::Mat Binaryfile2Mat(CompressConfiguration cfg , const std::string ImagePath);
 
 public:
     int CompressImage(CompressConfiguration cfg);
     double CalculateDiffImagePSNR(const std::string ImagePath1 , const std::string ImagePath2);
+    int ReconstructedImage(CompressConfiguration cfg , std::string ImagePath1 , std::string ImagePath2);
 
-
-};
-
-class NvcompCompressRunnerImpl
-{
-private:
-    
-public:
 };
