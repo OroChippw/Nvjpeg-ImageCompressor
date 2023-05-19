@@ -17,3 +17,6 @@ data/
 *.so
 *.exp
 *.pdb
+
+# others
+test.md

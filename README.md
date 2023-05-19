@@ -17,9 +17,9 @@ This repository use opencv 4.x
 
 ### How to build and run
 ```
-# Open the terminal, enter the source code directory where CMakeLists.txt is located, and create a new build folder
+# Enter the source code directory where CMakeLists.txt is located, and create a new build folder
 mkdir build
-# enter the build folder and run CMake to configure the project
+# Enter the build folder and run CMake to configure the project
 cd build
 cmake ..
 # Use the build system to compile/link this project
@@ -30,8 +30,9 @@ cmake --build .
 ```
 
 ## Ablation Experiment Record
-### Different SamplingFactors
-| SamplingFactors | meanCostTime | meanPSNR | meanPSNR | compression Ratio |
+
+### ① : Different SamplingFactors
+| SamplingFactors | meanCostTime(ms) | meanPSNR(dB) | meanPSNR | compression Ratio(%) |
 | :--------------:| :------------: | :---------: | :--------: | :-------: |
 | NVJPEG_CSS_444 | 266.32 | 32.31 | 0.28 |
 | NVJPEG_CSS_422 | 266.32 | 32.31 | 0.28 |
