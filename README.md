@@ -65,3 +65,4 @@ all image resolution is 8320*40000
 | / | 128.05 | 29.90 | A : 10 ; B : 6 ; C : 13 |
 
 ### License
+This project is licensed under the MIT License.
