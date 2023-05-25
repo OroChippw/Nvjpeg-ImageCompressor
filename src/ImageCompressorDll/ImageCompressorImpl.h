@@ -37,6 +37,7 @@ private:
 private:
     /* 通过和原图对比计算均方误差和峰值信噪比以评估图像质量 */
     double CalculatePSNR(cv::Mat srcImage , cv::Mat compImage);
+    void CalculateGrayAvgStdDev(cv::Mat&src , double& avg , double &stddev);
 
 public:
     NvjpegCompressRunnerImpl() {};
@@ -46,7 +47,7 @@ public:
     int ReadInput(const std::string input_path);
     int Compress(CompressConfiguration cfg);
     /* 计算原图和压缩图的差异图 */
-    cv::Mat CalculateDiffmap(const std::string srcImagePath , const std::string compImagePath , bool showinfo);
+    cv::Mat CalculateDiffmap(CompressConfiguration cfg , const std::string srcImagePath , const std::string compImagePath);
     /* 通过压缩图还原原图 */
     cv::Mat Reconstructed(cv::Mat Image1 , cv::Mat Image2);
     cv::Mat Binaryfile2Mat(CompressConfiguration cfg , const std::string ImagePath);

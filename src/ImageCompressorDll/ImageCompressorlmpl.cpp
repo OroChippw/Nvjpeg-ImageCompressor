@@ -199,8 +199,7 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
             {
                 psnr_val_score += CalculateDiffImagePSNR(files_list[index], output_result_path);
             }
-            diffmap = CalculateDiffmap(files_list[index] ,output_result_path , cfg.show_diff_info);
-
+            diffmap = CalculateDiffmap(cfg , files_list[index] , output_result_path);
             /* 如果想要保存一次压缩的差异图，解开以下注释 */
             // std::string output_diffmap_path = savedir + "\\" + "C.png" ;
             // cv::imwrite(output_diffmap_path , diffmap);
@@ -227,13 +226,13 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
     return EXIT_SUCCESS;
 }
 
-cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(const std::string srcImagePath , const std::string compImagePath , bool showinfo)
+cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(CompressConfiguration cfg , const std::string srcImagePath , const std::string compImagePath)
 {
     cv::Mat srcImage = cv::imread(srcImagePath, cv::IMREAD_ANYCOLOR);
     cv::Mat compressImage = cv::imread(compImagePath, cv::IMREAD_ANYCOLOR);
     cv::Mat diffMap = srcImage - compressImage;
 
-    if(showinfo)
+    if(cfg.show_diff_info)
     {
         double minVal, maxVal;
         cv::Point minIdx, maxIdx;
@@ -257,6 +256,37 @@ cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(const std::string srcImagePat
         cv::meanStdDev(diffMap, meanMat, stddevMat);
         std::cout << "diffMap MeanMat : " << meanMat << std::endl;
         std::cout << "diffMap stddevMat : " << stddevMat << std::endl;
+    }
+
+    if (cfg.use_roi)
+    {
+        double avgGray_crop = 0.0;
+        double stddevGray_crop = 0.0;
+
+        cv::Mat srcImage_roi = srcImage(cfg.roi_rect);
+        cv::Mat compressImage_roi = compressImage(cfg.roi_rect);
+
+        // std::string temp_path = "E:\\OroChiLab\\NvjpegImageCompressor_cmake\\data\\temp";
+        // cv::imwrite(temp_path + "\\srcCrop.png" , srcImage_roi);
+        // cv::imwrite(temp_path + "\\compressCrop.png" , compressImage_roi);
+
+        CalculateGrayAvgStdDev(srcImage_roi , avgGray_crop , stddevGray_crop);
+        std::cout << "avgGray_crop : " << avgGray_crop << std::endl;
+        std::cout << "stddevGray_crop : " << stddevGray_crop << std::endl;
+
+        double avgGray_compress = 0.0;
+        double stddevGray_compress = 0.0;
+
+        CalculateGrayAvgStdDev(compressImage_roi , avgGray_compress , stddevGray_compress);
+        std::cout << "avgGray_compress : " << avgGray_compress << std::endl;
+        std::cout << "stddevGray_compress : " << stddevGray_compress << std::endl;
+
+        std::cout << "avgGray_diff : " << abs(avgGray_compress - avgGray_crop) << std::endl;
+        std::cout << "stddevGray_diff : " << abs(stddevGray_compress - stddevGray_crop) << std::endl;
+
+        double cropPSNR = CalculatePSNR(srcImage_roi , compressImage_roi);
+        std::cout << "cropPSNR : " << cropPSNR << std::endl;
+
     }
     
     return diffMap;
@@ -282,6 +312,22 @@ double NvjpegCompressRunnerImpl::CalculatePSNR(cv::Mat srcImage , cv::Mat compIm
         std::cout << "[VAL->MSE] : " << mse << " [VAL->PSNR] : " << psnr << std::endl;
         return psnr;
     }
+}
+
+void NvjpegCompressRunnerImpl::CalculateGrayAvgStdDev(cv::Mat&src , double& avg , double &stddev)
+{
+    cv::Mat img;
+    if (src.channels() == 3)
+        cv::cvtColor(src, img, cv::COLOR_BGR2GRAY);
+    else
+        img = src;
+    cv::mean(src);
+    cv::Mat mean;
+    cv::Mat stdDev;
+    cv::meanStdDev(img, mean, stdDev);
+
+    avg = mean.ptr<double>(0)[0];
+    stddev = stdDev.ptr<double>(0)[0];
 }
 
 cv::Mat NvjpegCompressRunnerImpl::Reconstructed(cv::Mat Image1 , cv::Mat Image2)
