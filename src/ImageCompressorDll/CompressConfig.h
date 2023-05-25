@@ -1,5 +1,6 @@
 #pragma once
 #include <iostream>
+#include <opencv2/opencv.hpp>
 
 struct CompressConfiguration {
     std::string input_dir;
@@ -16,4 +17,11 @@ struct CompressConfiguration {
     bool save_mat = false;
     bool save_binary = true;
     bool do_val = false;
+
+    bool use_roi = false;
+    int roi_w = 10;
+    int roi_h = 10;
+
+    cv::Rect roi_rect;
+    
 };
