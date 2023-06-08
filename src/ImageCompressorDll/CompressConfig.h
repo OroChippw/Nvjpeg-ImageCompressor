@@ -22,6 +22,9 @@ struct CompressConfiguration {
     int roi_w = 10;
     int roi_h = 10;
 
+    bool do_crop = false;
+    int crop_ratio = 0;
+
     cv::Rect roi_rect;
     
 };
