@@ -1,4 +1,5 @@
-#pragma warning (disable:4819)
+# pragma warning (disable:4819)
+# pragma warning (disable:4996)
 
 #include <iostream>
 #include <fstream>
@@ -7,7 +8,6 @@
 
 #include "ImageCompressorImpl.h"
 #include "CompressConfig.h"
-
 
 int NvjpegCompressRunnerImpl::ReadInput(const std::string input_path)
 {   
@@ -60,33 +60,25 @@ int NvjpegCompressRunnerImpl::ReadInput(const std::string input_path)
 
 std::vector<cv::Mat> NvjpegCompressRunnerImpl::CropImage(const cv::Mat Image , int crop_ratio)
 {
-    const unsigned int image_width = Image.cols;
-    const unsigned int image_height = Image.rows;
-    const unsigned int channel_size = image_width * image_height;
-    std::cout << "[IMAGE INFO] width : "<< image_width << " height : " << image_height << std::endl;
-
-    unsigned int after_crop_width = image_width / crop_ratio;
-    unsigned int after_crop_height = image_height / crop_ratio;
-
     std::vector<cv::Mat> crop_list;
     unsigned int index_x = 0, index_y = 0;
-    
-    for (unsigned int i = 1 ; i <= crop_ratio ; i++)
+    unsigned int after_crop_width = Image.cols / crop_ratio;
+    unsigned int after_crop_height = Image.rows / crop_ratio;
+
+    // 列优先切分大图为crop_ratio平方块小图
+    for (int i = 1 ; i <= crop_ratio ; i++)
     {
-        for (unsigned int j = 1 ; j <= crop_ratio ; j++)
+        for (int j = 1 ; j <= crop_ratio ; j++)
         {
             cv::Rect rect(index_x , index_y , after_crop_width , after_crop_height);
-            cv::Mat temp_mat = Image(rect);
-            std::cout << "step_i : " << i << " step_j : " << j <<  " - index_x : " << index_x << " index_y : " << index_y << std::endl; 
-            std::cout << "[TEMP IMAGE INFO] width : "<< temp_mat.cols << " height : " << temp_mat.rows << std::endl;
-            crop_list.emplace_back(temp_mat);
+            crop_list.emplace_back(Image(rect));
             index_y += (after_crop_height);
         }
         index_x += (after_crop_width);
         index_y = 0;
     }
 
-    std::cout << "Finish cropping , crop_list size : " << crop_list.size() << std::endl;
+    std::cout << "=》 Finish cropping and Crop_list size is " << crop_list.size() << std::endl;
     return crop_list;
 }
 
@@ -95,7 +87,7 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(CompressConf
     const unsigned int image_width = Image.cols;
     const unsigned int image_height = Image.rows;
     const unsigned int channel_size = image_width * image_height;
-    std::cout << "[IMAGE INFO] width : "<< image_width << " height : " << image_height << std::endl;
+    std::cout << "[COMPRESS IMAGE INFO] width : "<< image_width << " height : " << image_height << std::endl;
 
      /* nvjpeg init*/
     nvjpegHandle_t nvjpeg_handle;
@@ -188,20 +180,17 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
         {
             std::filesystem::create_directories(savedir);
         }
-
+        
+        cv::Mat diffmap;
         time_total = 0.0;
         psnr_val_score = 0.0;
 
-        cv::Mat diffmap;
-
-        for(unsigned int stage_index = 0 ; stage_index < stage_num ; stage_index++)
-        {
-            std::string image_path = files_list[index];
-            
+        for(int stage_index = 0 ; stage_index < stage_num ; stage_index++)
+        {            
             cv::Mat srcImage;
             if (stage_index == 0)
             {
-                srcImage = cv::imread(image_path , cv::IMREAD_COLOR);
+                srcImage = cv::imread(files_list[index] , cv::IMREAD_COLOR);
                 std::cout << "=> Enter secondary compression stage 1 ..." << std::endl;
             }else
             {
@@ -219,38 +208,33 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
             }
 
             std::vector<std::vector<unsigned char>> obuffer_lists;
-        
             for (unsigned int index = 0 ; index < image_lists.size() ;index++)
             {
                 obuffer_lists.push_back(CompressWorker(cfg , image_lists[index]));
             }
             
-            std::cout << "obuffer_lists size : " << obuffer_lists.size() << std::endl;
-
             std::string compress_result_name = (stage_index != 0) ? "D" : "B";
             std::string output_result_path;
             std::vector<std::string> result_path_lists;
 
             for (unsigned int index = 0 ; index < obuffer_lists.size() ; index++)
             {
-                auto obuffer = obuffer_lists[index];
-                output_result_path = savedir + "\\" + compress_result_name + "_" + std::to_string(index) + ".png";
+                output_result_path = savedir + "\\" + std::to_string(index) + ".png";
                 std::ofstream outputFile(output_result_path, std::ios::out | std::ios::binary);
-                outputFile.write(reinterpret_cast<const char*>(obuffer.data()), static_cast<int>(obuffer.size()));
+                outputFile.write(reinterpret_cast<const char*>(obuffer_lists[index].data()), static_cast<int>(obuffer_lists[index].size()));
                 outputFile.close();
-                std::cout << "Save compress mat result as : " << output_result_path << std::endl;
+                // std::cout << "Save compress mat result as : " << output_result_path << std::endl;
                 result_path_lists.emplace_back(output_result_path);
                 if(cfg.save_binary)
                 {
-                    std::string output_result_bin_path = savedir + "\\" + compress_result_name + "_" + std::to_string(index) + ".bin";
+                    std::string output_result_bin_path = savedir + "\\" + std::to_string(index) + ".bin";
                     std::ofstream outputBinFile(output_result_bin_path, std::ios::out | std::ios::binary);
-                    outputBinFile.write(reinterpret_cast<const char*>(obuffer.data()), static_cast<int>(obuffer.size()));
+                    outputBinFile.write(reinterpret_cast<const char*>(obuffer_lists[index].data()), static_cast<int>(obuffer_lists[index].size()));
                     outputBinFile.close();
-                    std::cout << "Save compress bin result as : " << output_result_bin_path << std::endl;
+                    // std::cout << "Save compress bin result as : " << output_result_bin_path << std::endl;
                 }
             }
             
-            /* 当进行二次压缩时不再需要计算差异图 */
             if (stage_index != 0) 
             {
                 if(!cfg.save_mat)
@@ -260,7 +244,7 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
                         std::cout << "Delete stage 2 compress mat successfully" << std::endl;
                     }
                 }
-                continue;
+                continue; /* 当进行二次压缩时不再需要计算差异图 */
             } 
 
             /* 计算输入图和压缩图的峰值信噪比 */
@@ -271,16 +255,12 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
                     psnr_val_score += CalculateDiffImagePSNR(image_lists[index], result_path_lists[index]);   
                 }
             }
+
             // for (unsigned int index = 0 ; index < result_path_lists.size() ; index++)
             // {
             //     diffmap = CalculateDiffmap(cfg , files_list[index] , output_result_path);
             // }
             
-            /* 如果想要保存一次压缩的差异图，解开以下注释 */
-            // std::string output_diffmap_path = savedir + "\\" + "C.png" ;
-            // cv::imwrite(output_diffmap_path , diffmap);
-            // std::cout << "Save diffmap result as : " << output_diffmap_path << std::endl;
-
             if(!cfg.save_mat)
             {
                 if(remove(output_result_path.c_str()) == 0)
@@ -295,14 +275,11 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
     std::cout << files_list.size() << " Images mean Cost time : " << time_total / files_list.size() << "ms" << std::endl;
     std::cout << files_list.size() << " Images mean PSNR  : " << psnr_val_score / files_list.size() << "dB" << std::endl;
 
-
-    
     return EXIT_SUCCESS;
 }
 
 cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(CompressConfiguration cfg , const cv::Mat srcImage , const std::string compImagePath)
 {
-    // cv::Mat srcImage = cv::imread(srcImagePath, cv::IMREAD_ANYCOLOR);
     cv::Mat compressImage = cv::imread(compImagePath, cv::IMREAD_ANYCOLOR);
     cv::Mat diffMap = srcImage - compressImage;
 
@@ -322,10 +299,6 @@ cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(CompressConfiguration cfg , c
         
         cv::Scalar channelsMean;
         channelsMean = mean(diffMap);
-        std::cout << "diffMap channelsMean[0] : " << channelsMean[0] << std::endl; 
-        std::cout << "diffMap channelsMean[1] : " << channelsMean[1] << std::endl;
-        std::cout << "diffMap channelsMean[2] : " << channelsMean[2] << std::endl;
-
         cv::Mat meanMat, stddevMat;
         cv::meanStdDev(diffMap, meanMat, stddevMat);
         std::cout << "diffMap MeanMat : " << meanMat << std::endl;
@@ -336,17 +309,14 @@ cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(CompressConfiguration cfg , c
     {
         double avgGray_crop = 0.0;
         double stddevGray_crop = 0.0;
-
+        double avgGray_compress = 0.0;
+        double stddevGray_compress = 0.0;
         cv::Mat srcImage_roi = srcImage(cfg.roi_rect);
         cv::Mat compressImage_roi = compressImage(cfg.roi_rect);
-
 
         CalculateGrayAvgStdDev(srcImage_roi , avgGray_crop , stddevGray_crop);
         std::cout << "avgGray_crop : " << avgGray_crop << std::endl;
         std::cout << "stddevGray_crop : " << stddevGray_crop << std::endl;
-
-        double avgGray_compress = 0.0;
-        double stddevGray_compress = 0.0;
 
         CalculateGrayAvgStdDev(compressImage_roi , avgGray_compress , stddevGray_compress);
         std::cout << "avgGray_compress : " << avgGray_compress << std::endl;
@@ -364,8 +334,6 @@ cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(CompressConfiguration cfg , c
 
 double NvjpegCompressRunnerImpl::CalculatePSNR(cv::Mat srcImage , cv::Mat compImage)
 {
-    const unsigned int w = srcImage.cols;
-    const unsigned int h = srcImage.rows;
     const unsigned int max = 255;
     cv::Mat subImage;
     cv::absdiff(srcImage , compImage , subImage);
@@ -377,7 +345,7 @@ double NvjpegCompressRunnerImpl::CalculatePSNR(cv::Mat srcImage , cv::Mat compIm
         return 0;
     }else
     {
-        double mse = sse / h / w;
+        double mse = sse / srcImage.rows / srcImage.cols;
         double psnr = 10 * log10(pow(max , 2) / mse);
         std::cout << "[VAL->MSE] : " << mse << " [VAL->PSNR] : " << psnr << std::endl;
         return psnr;
@@ -386,14 +354,12 @@ double NvjpegCompressRunnerImpl::CalculatePSNR(cv::Mat srcImage , cv::Mat compIm
 
 void NvjpegCompressRunnerImpl::CalculateGrayAvgStdDev(cv::Mat&src , double& avg , double &stddev)
 {
-    cv::Mat img;
+    cv::Mat img , mean , stdDev;
     if (src.channels() == 3)
         cv::cvtColor(src, img, cv::COLOR_BGR2GRAY);
     else
         img = src;
     cv::mean(src);
-    cv::Mat mean;
-    cv::Mat stdDev;
     cv::meanStdDev(img, mean, stdDev);
 
     avg = mean.ptr<double>(0)[0];
@@ -402,8 +368,7 @@ void NvjpegCompressRunnerImpl::CalculateGrayAvgStdDev(cv::Mat&src , double& avg 
 
 cv::Mat NvjpegCompressRunnerImpl::Reconstructed(cv::Mat Image1 , cv::Mat Image2)
 {
-    cv::Mat ConstructedImage = Image1 + Image2;
-    return ConstructedImage;
+    return Image1 + Image2;
 }
 
 int NvjpegCompressRunnerImpl::CompressImage(CompressConfiguration cfg)
@@ -421,7 +386,6 @@ double NvjpegCompressRunnerImpl::CalculateDiffImagePSNR(const cv::Mat image1 , c
 {
     // cv::Mat image1 = cv::imread(ImagePath1 , cv::IMREAD_ANYCOLOR);
     cv::Mat image2 = cv::imread(ImagePath2 , cv::IMREAD_ANYCOLOR);
-
     double psnr = CalculatePSNR(image1 , image2);
 
     return psnr;
@@ -430,12 +394,9 @@ double NvjpegCompressRunnerImpl::CalculateDiffImagePSNR(const cv::Mat image1 , c
 cv::Mat NvjpegCompressRunnerImpl::Binaryfile2Mat(CompressConfiguration cfg , std::string ImagePath)
 {
     cv::Mat Image;
-   
     FILE* pfile = fopen(ImagePath.c_str() , "rb");
     if (pfile == NULL)
-    {
         return Image;
-    }
     
     fseek(pfile , 0 , SEEK_END);
     const unsigned int length = ftell(pfile);
@@ -457,35 +418,85 @@ cv::Mat NvjpegCompressRunnerImpl::Binaryfile2Mat(CompressConfiguration cfg , std
     return Image;
 }
 
-int NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg , std::string ImagePath1 , std::string ImagePath2)
+
+
+
+bool compareNumericStrings(const std::string str1, const std::string str2)
+{
+    std::string::size_type iPos = str1.find_last_of('\\') + 1;
+    std::string filename = str1.substr(iPos, str1.length() - iPos);
+    std::string num1 = filename.substr(0, filename.find("."));   
+    int num1_ = std::stoi(str1);
+    std::string::size_type iPos2 = str2.find_last_of('\\') + 1;
+    std::string filename2 = str2.substr(iPos2, str2.length() - iPos2);
+    std::string num2 = filename2.substr(0, filename2.find("."));  
+    int num2_ = std::stoi(str2);
+    std::cout << "num1 : " << num1_ << std::endl;
+    std::cout << "num2 : " << num2_ << std::endl;
+
+    return (num1_ < num2_);
+}
+
+cv::Mat NvjpegCompressRunnerImpl::MergeBinImage(CompressConfiguration cfg , std::vector<std::string> bin_files)
+{
+    unsigned int after_crop_width = cfg.width / cfg.crop_ratio;
+    unsigned int after_crop_height = cfg.height / cfg.crop_ratio;
+    std::cout << "sort" << std::endl;
+    std::sort(bin_files.begin() , bin_files.end() , compareNumericStrings);
+    std::cout << "sorted" << std::endl;
+    std::vector<cv::Mat> image_list;
+    for (int i = 0 ; i < bin_files.size() ; i++)
+    {
+        std::cout << bin_files[i] << std::endl;
+        image_list.emplace_back(Binaryfile2Mat(cfg , bin_files[i]));
+    }
+
+    int sum_num = cfg.crop_ratio * cfg.crop_ratio;
+    int index = 0 , index_x = 0 , index_y = 0;
+    cv::Mat resultImage = cv::Mat::zeros(cfg.height , cfg.width , image_list[0].type());
+
+    for (int i = 1 ; i <= cfg.crop_ratio ; i++)
+    {
+        for (int j = 1 ; j <= cfg.crop_ratio ; j++)
+        {
+            image_list[index].copyTo(resultImage(cv::Rect(index_x , index_y , image_list[index].cols , image_list[index].rows)));
+            index_y += (after_crop_height);
+            index += 1;
+        }
+        index_x += (after_crop_width);
+        index_y = 0;
+    }
+
+    return resultImage;
+}
+
+
+int NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg , std::string ImageDirPath)
 {
     std::cout << "=> Start image reconstruction ... " <<std::endl;
     struct stat buffer;
-    if (!((stat(ImagePath1.c_str() , &buffer) == 0) && (stat(ImagePath2.c_str() , &buffer) == 0)))
-    {
+    if (!((stat(ImageDirPath.c_str() , &buffer) == 0)))
         return EXIT_FAILURE;
-    }
 
-    std::string file_format = ImagePath1.substr(ImagePath1.find_last_of('.') + 1);//获取文件后缀
+    std::vector<std::string> bin_files;
+    std::vector<cv::String> images_files;
+    std::string image_jpg_path = ImageDirPath + "//*.jpg";
+    std::string image_bin_path = ImageDirPath + "//*.bin";
+    cv::glob(image_jpg_path , images_files);
+    cv::glob(image_bin_path , bin_files);
 
-    cv::Mat image_b;
-    cv::Mat image_d;
+    cv::Mat resultImage;
     
-    if (file_format == "bin")
+    if (bin_files.size() != 0)
     {
-        image_b = Binaryfile2Mat(cfg , ImagePath1);
-        image_d = Binaryfile2Mat(cfg , ImagePath2);
-    }else if (file_format == "jpg" || file_format == "png")
-    {
-        image_b = cv::imread(ImagePath1 , cv::IMREAD_COLOR);
-        image_d = cv::imread(ImagePath2 , cv::IMREAD_COLOR);
+        resultImage = MergeBinImage(cfg , bin_files);
     }
-    if(image_b.empty() || image_d.empty()) {return EXIT_FAILURE;}
-    cv::Mat resultImage = Reconstructed(image_b , image_d);
+    
+    // if(image_b.empty() || image_d.empty()) {return EXIT_FAILURE;}
+    // cv::Mat resultImage = Reconstructed(image_b , image_d);
     std::string output_result_path = cfg.rebuild_dir + "\\E.png";
     cv::imwrite(output_result_path , resultImage);
     std::cout << "Save reconstructed mat result as : " << output_result_path << std::endl;
-
 
     return EXIT_SUCCESS;
 }
