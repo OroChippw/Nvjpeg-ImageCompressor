@@ -25,12 +25,12 @@ int main()
     cfg.use_optimizedHuffman = true;
     cfg.multi_stage = false;
     cfg.show_diff_info = false;
-    cfg.save_mat = true;
+    cfg.save_mat = false;
     cfg.save_binary = true;
     cfg.do_val = false;
 
     cfg.do_crop = true;
-    cfg.crop_ratio = 4;
+    cfg.crop_ratio = 100;
     
     cfg.use_roi = false;
     if (cfg.use_roi)
@@ -46,21 +46,11 @@ int main()
         return EXIT_FAILURE;
     }
 
-    if (cfg.do_crop)
-    {
-        if (!((cfg.width % cfg.crop_ratio == 0) || (cfg.height % cfg.crop_ratio == 0)))
-        {
-            std::cout << "The width and height of the image must be divisible by the number of blocks" << std::endl;
-            return EXIT_FAILURE;
-        }
-    }
-
-
     /* Init compressor*/    
     NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
 
     /* Compress Samples */
-    // compressor->compress(cfg);
+    compressor->compress(cfg);
 
     /* Reconstruct Samples */
     std::string reconstruct_path = "..//data//compress_result//9-3";

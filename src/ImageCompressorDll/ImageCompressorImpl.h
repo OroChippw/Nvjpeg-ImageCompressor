@@ -45,6 +45,7 @@ private:
     /* 读入文件列表及相关图像前处理 */
     int ReadInput(const std::string input_path);
     std::vector<cv::Mat> CropImage(const cv::Mat Image , int crop_ratio);
+    int CalculateGreatestFactor(int m , int n);
 
     /* 执行压缩的组件 */
     int Compress(CompressConfiguration cfg);
@@ -61,9 +62,7 @@ private:
     cv::Mat Reconstructed(cv::Mat Image1 , cv::Mat Image2);
     cv::Mat Binaryfile2Mat(CompressConfiguration cfg , std::string ImagePath);
     cv::Mat MergeBinImage(CompressConfiguration cfg , std::vector<std::string> bin_files);
-
-    bool cmp(const std::string& str1, const std::string& str2);
-
+    
 public:
     int CompressImage(CompressConfiguration cfg);
     double CalculateDiffImagePSNR(const cv::Mat image1 , const std::string ImagePath2);
