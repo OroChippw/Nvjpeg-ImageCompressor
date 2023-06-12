@@ -37,29 +37,36 @@ private:
     double time_total;
     double psnr_val_score; 
 
-private:
-    /* 通过和原图对比计算均方误差和峰值信噪比以评估图像质量 */
-    double CalculatePSNR(cv::Mat srcImage , cv::Mat compImage);
-    void CalculateGrayAvgStdDev(cv::Mat&src , double& avg , double &stddev);
-    std::vector<unsigned char> CompressWorker(CompressConfiguration cfg , const cv::Mat Image);
-    std::vector<cv::Mat> CropImage(const cv::Mat Image , int crop_ratio);
-
 public:
     NvjpegCompressRunnerImpl() {};
     ~NvjpegCompressRunnerImpl() {};
 
-public:
+private:
+    /* 读入文件列表及相关图像前处理 */
     int ReadInput(const std::string input_path);
+    std::vector<cv::Mat> CropImage(const cv::Mat Image , int crop_ratio);
+
+    /* 执行压缩的组件 */
     int Compress(CompressConfiguration cfg);
+    std::vector<unsigned char> CompressWorker(CompressConfiguration cfg , const cv::Mat Image);
+
+    /* 通过和原图对比计算均方误差和峰值信噪比以评估图像质量 */
+    double CalculatePSNR(cv::Mat srcImage , cv::Mat compImage);
+    /* 通过和原图对比灰度均值及标准差以评估图像质量 */
+    void CalculateGrayAvgStdDev(cv::Mat&src , double& avg , double &stddev);
     /* 计算原图和压缩图的差异图 */
     cv::Mat CalculateDiffmap(CompressConfiguration cfg , const cv::Mat srcImage , const std::string compImagePath);
+    
     /* 通过压缩图还原原图 */
     cv::Mat Reconstructed(cv::Mat Image1 , cv::Mat Image2);
-    cv::Mat Binaryfile2Mat(CompressConfiguration cfg , const std::string ImagePath);
+    cv::Mat Binaryfile2Mat(CompressConfiguration cfg , std::string ImagePath);
+    cv::Mat MergeBinImage(CompressConfiguration cfg , std::vector<std::string> bin_files);
+
+    bool cmp(const std::string& str1, const std::string& str2);
 
 public:
     int CompressImage(CompressConfiguration cfg);
     double CalculateDiffImagePSNR(const cv::Mat image1 , const std::string ImagePath2);
-    int ReconstructedImage(CompressConfiguration cfg , std::string ImagePath1 , std::string ImagePath2);
+    int ReconstructedImage(CompressConfiguration cfg , std::string ImageDirPath);
 
 };

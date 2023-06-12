@@ -21,8 +21,8 @@ void NvjpegCompressRunner::compress(CompressConfiguration cfg)
     std::cout << "=> Compress " << run_state << std::endl;
 }
 
-void NvjpegCompressRunner::reconstruct(CompressConfiguration cfg , std::string ImagePath1 , std::string ImagePath2)
+void NvjpegCompressRunner::reconstruct(CompressConfiguration cfg , std::string ImageDirPath)
 {
-    std::string run_state = compressor->ReconstructedImage(cfg , ImagePath1 , ImagePath2) ? "Failure" : "Finish";
+    std::string run_state = compressor->ReconstructedImage(cfg , ImageDirPath) ? "Failure" : "Finish";
     std::cout << "=> Reconstructed " << run_state << std::endl;
 }
