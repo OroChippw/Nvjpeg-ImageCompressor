@@ -219,7 +219,6 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
                 obuffer_lists.push_back(CompressWorker(cfg, image_lists[index]));
             }
 
-            std::string compress_result_name = (stage_index != 0) ? "D" : "B";
             std::string output_result_path;
             std::vector<std::string> result_path_lists;
 
@@ -244,10 +243,12 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
             if (stage_index != 0)
             {
                 if (!cfg.save_mat)
-                {
-                    if (remove(output_result_path.c_str()) == 0)
+                {   
+                    std::cout << "cfg.save_mat : " <<  cfg.save_mat << std::endl;
+                    for (auto file : result_path_lists)
                     {
-                        std::cout << "Delete stage 2 compress mat successfully" << std::endl;
+                        std::string remove_status = (remove(file.c_str()) == 0) ? "Successfully" : "Failure" ;
+                        std::cout << "Delete file " << file << " " << remove_status << std::endl;
                     }
                 }
                 continue; /* 当进行二次压缩时不再需要计算差异图 */
@@ -267,11 +268,13 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
             //     diffmap = CalculateDiffmap(cfg , files_list[index] , output_result_path);
             // }
 
-            if (!cfg.save_mat)
-            {
-                if (remove(output_result_path.c_str()) == 0)
+           if (!cfg.save_mat)
+            {   
+                std::cout << "cfg.save_mat : " <<  cfg.save_mat << std::endl;
+                for (auto file : result_path_lists)
                 {
-                    std::cout << "Delete stage 1 compress mat successfully" << std::endl;
+                    std::string remove_status = (remove(file.c_str()) == 0) ? "Successfully" : "Failure" ;
+                    std::cout << "Delete file " << file << " " << remove_status << std::endl;
                 }
             }
         }
@@ -378,10 +381,50 @@ cv::Mat NvjpegCompressRunnerImpl::Reconstructed(cv::Mat Image1, cv::Mat Image2)
     return Image1 + Image2;
 }
 
+int NvjpegCompressRunnerImpl::CalculateGreatestFactor(const int width , const int height)
+{
+    std::vector<int> width_factor , height_factor;
+    int ceil = 3 , factor = 1;
+    for(int i = 1 ; i <= width ; i++){
+        if (width % i==0) {
+            width_factor.emplace_back(i);
+        }
+        if (i > ceil) {break;}
+    }
+    for(int i = 1 ; i <= height ; i++){
+        if (height % i==0) {
+            height_factor.emplace_back(i);
+        }
+        if (i > ceil) {break;}
+    }
+    for (int index = 0 ; index < min(width_factor.size() , height_factor.size()); index++)
+    {
+        if (width_factor[index] == height_factor[index])
+        {
+            factor = width_factor[index];
+            continue;
+        }else{
+            factor = width_factor[index - 1];
+            break;
+        } 
+    }
+    
+	return factor;
+}
+
 int NvjpegCompressRunnerImpl::CompressImage(CompressConfiguration cfg)
 {
     int read_state = ReadInput(cfg.input_dir);
     std::cout << "=> Start image compression ... " << std::endl;
+    if (cfg.do_crop)
+    {
+        if (!((cfg.width % cfg.crop_ratio == 0) && (cfg.height % cfg.crop_ratio == 0)))
+        {
+            std::cout << "The width and height of the image must be divisible by the number of blocks" << std::endl;
+            std::cout << "=> Calculate the greatest common factor of width and height" << std::endl;
+            cfg.crop_ratio = CalculateGreatestFactor(cfg.width , cfg.height);
+        }
+    }
     if (Compress(cfg))
     {
         return EXIT_FAILURE;
@@ -391,7 +434,6 @@ int NvjpegCompressRunnerImpl::CompressImage(CompressConfiguration cfg)
 
 double NvjpegCompressRunnerImpl::CalculateDiffImagePSNR(const cv::Mat image1, const std::string ImagePath2)
 {
-    // cv::Mat image1 = cv::imread(ImagePath1 , cv::IMREAD_ANYCOLOR);
     cv::Mat image2 = cv::imread(ImagePath2, cv::IMREAD_ANYCOLOR);
     double psnr = CalculatePSNR(image1, image2);
 
@@ -479,7 +521,15 @@ int NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg, std:
     struct stat buffer;
     if (!((stat(ImageDirPath.c_str(), &buffer) == 0)))
         return EXIT_FAILURE;
-
+    if (cfg.do_crop)
+    {
+        if (!((cfg.width % cfg.crop_ratio == 0) && (cfg.height % cfg.crop_ratio == 0)))
+        {
+            std::cout << "The width and height of the image must be divisible by the number of blocks" << std::endl;
+            std::cout << "=> Calculate the greatest common factor of width and height" << std::endl;
+            cfg.crop_ratio = CalculateGreatestFactor(cfg.width , cfg.height);
+        }
+    }
     std::vector<std::string> bin_files;
     std::vector<cv::String> images_files;
     std::string image_jpg_path = ImageDirPath + "//*.jpg";
@@ -494,8 +544,6 @@ int NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg, std:
         resultImage = MergeBinImage(cfg, bin_files);
     }
 
-    // if(image_b.empty() || image_d.empty()) {return EXIT_FAILURE;}
-    // cv::Mat resultImage = Reconstructed(image_b , image_d);
     std::string output_result_path = cfg.rebuild_dir + "\\E.png";
     cv::imwrite(output_result_path, resultImage);
     std::cout << "Save reconstructed mat result as : " << output_result_path << std::endl;
