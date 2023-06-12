@@ -62,6 +62,7 @@ private:
     cv::Mat Binaryfile2Mat(CompressConfiguration cfg , std::string ImagePath);
     cv::Mat MergeBinImage(CompressConfiguration cfg , std::vector<std::string> bin_files);
 
+    bool cmp(const std::string& str1, const std::string& str2);
 
 public:
     int CompressImage(CompressConfiguration cfg);

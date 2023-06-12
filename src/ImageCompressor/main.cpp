@@ -60,7 +60,7 @@ int main()
     NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
 
     /* Compress Samples */
-    compressor->compress(cfg);
+    // compressor->compress(cfg);
 
     /* Reconstruct Samples */
     std::string reconstruct_path = "..//data//compress_result//9-3";
