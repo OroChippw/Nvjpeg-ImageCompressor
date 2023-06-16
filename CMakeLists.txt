@@ -23,8 +23,8 @@ set(NVJPEG_LIB nvjpeg cublas cuda cudadevrt cudart_static)
 set(OPENCV_DIR  ${CMAKE_SOURCE_DIR}/third_party/opencv4)
 include_directories(${OPENCV_DIR}/include)
 link_directories("${OPENCV_DIR}/lib")
-set(OPENCV_LIB opencv_world470d)
-# set(OPENCV_LIB opencv_world470)
+# set(OPENCV_LIB opencv_world470d)
+set(OPENCV_LIB opencv_world470)
 
 include_directories("src/ImageCompressorDll")
 
