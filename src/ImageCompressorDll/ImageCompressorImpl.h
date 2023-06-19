@@ -66,6 +66,6 @@ private:
 public:
     int CompressImage(CompressConfiguration cfg);
     double CalculateDiffImagePSNR(const cv::Mat image1 , const std::string ImagePath2);
-    int ReconstructedImage(CompressConfiguration cfg , std::string ImageDirPath);
+    cv::Mat ReconstructedImage(CompressConfiguration cfg , std::string ImageDirPath);
 
 };

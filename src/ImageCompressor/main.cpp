@@ -55,7 +55,7 @@ int main()
     /* Reconstruct Samples */
     std::string reconstruct_path = "..//data//compress_result//9-3";
 
-    compressor->reconstruct(cfg , reconstruct_path);
+    cv::Mat reconstructImage = compressor->reconstruct(cfg , reconstruct_path);
     
 
     return EXIT_SUCCESS;

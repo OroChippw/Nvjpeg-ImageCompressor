@@ -224,12 +224,16 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
 
             for (unsigned int index = 0; index < obuffer_lists.size(); index++)
             {
-                output_result_path = savedir + "\\" + std::to_string(index) + ".png";
-                std::ofstream outputFile(output_result_path, std::ios::out | std::ios::binary);
-                outputFile.write(reinterpret_cast<const char*>(obuffer_lists[index].data()), static_cast<int>(obuffer_lists[index].size()));
-                outputFile.close();
-                // std::cout << "Save compress mat result as : " << output_result_path << std::endl;
-                result_path_lists.emplace_back(output_result_path);
+                if (cfg.save_mat)
+                {
+                    output_result_path = savedir + "\\" + std::to_string(index) + ".png";
+                    std::ofstream outputFile(output_result_path, std::ios::out | std::ios::binary);
+                    outputFile.write(reinterpret_cast<const char*>(obuffer_lists[index].data()), static_cast<int>(obuffer_lists[index].size()));
+                    outputFile.close();
+                    // std::cout << "Save compress mat result as : " << output_result_path << std::endl;
+                    result_path_lists.emplace_back(output_result_path);
+                }
+                
                 if (cfg.save_binary)
                 {
                     std::string output_result_bin_path = savedir + "\\" + std::to_string(index) + ".bin";
@@ -270,7 +274,7 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
 
            if (!cfg.save_mat)
             {   
-                std::cout << "cfg.save_mat : " <<  cfg.save_mat << std::endl;
+                // std::cout << "cfg.save_mat : " <<  cfg.save_mat << std::endl;
                 for (auto file : result_path_lists)
                 {
                     std::string remove_status = (remove(file.c_str()) == 0) ? "Successfully" : "Failure" ;
@@ -490,10 +494,14 @@ cv::Mat NvjpegCompressRunnerImpl::MergeBinImage(CompressConfiguration cfg, std::
 
     std::sort(bin_files.begin(), bin_files.end(), cmp);
     std::vector<cv::Mat> image_list;
+    // auto startTime = std::chrono::steady_clock::now();
     for (int i = 0; i < bin_files.size(); i++)
     {
         image_list.emplace_back(Binaryfile2Mat(cfg, bin_files[i]));
     }
+    // auto endTime = std::chrono::steady_clock::now();
+    // auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
+    // std::cout << "Binaryfile2Mat func cost time: " << elapsedTime << " s" << std::endl;
 
     int sum_num = cfg.crop_ratio * cfg.crop_ratio;
     int index = 0, index_x = 0, index_y = 0;
@@ -510,17 +518,18 @@ cv::Mat NvjpegCompressRunnerImpl::MergeBinImage(CompressConfiguration cfg, std::
         index_x += (after_crop_width);
         index_y = 0;
     }
-
+   
     return resultImage;
 }
 
 
-int NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg, std::string ImageDirPath)
+cv::Mat NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg, std::string ImageDirPath)
 {
     std::cout << "=> Start image reconstruction ... " << std::endl;
+    cv::Mat resultImage;
     struct stat buffer;
     if (!((stat(ImageDirPath.c_str(), &buffer) == 0)))
-        return EXIT_FAILURE;
+        return resultImage;
     if (cfg.do_crop)
     {
         if (!((cfg.width % cfg.crop_ratio == 0) && (cfg.height % cfg.crop_ratio == 0)))
@@ -532,21 +541,30 @@ int NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg, std:
     }
     std::vector<std::string> bin_files;
     std::vector<cv::String> images_files;
-    std::string image_jpg_path = ImageDirPath + "//*.jpg";
+    // std::string image_jpg_path = ImageDirPath + "//*.jpg";
     std::string image_bin_path = ImageDirPath + "//*.bin";
-    cv::glob(image_jpg_path, images_files);
+    // cv::glob(image_jpg_path, images_files);
     cv::glob(image_bin_path, bin_files);
 
-    cv::Mat resultImage;
+    // auto startTime = std::chrono::steady_clock::now();
 
     if (bin_files.size() != 0)
     {
         resultImage = MergeBinImage(cfg, bin_files);
     }
+    // auto endTime = std::chrono::steady_clock::now();
+    // auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
+    // std::cout << "MergeBinImage func cost time: " << elapsedTime << " s" << std::endl;
+
 
     std::string output_result_path = cfg.rebuild_dir + "\\E.png";
-    cv::imwrite(output_result_path, resultImage);
+    // auto startTime_1 = std::chrono::steady_clock::now();
+    // cv::imwrite(output_result_path, resultImage);
+    // auto endTime_1 = std::chrono::steady_clock::now();
+    // auto elapsedTime_1 = std::chrono::duration_cast<std::chrono::seconds>(endTime_1 - startTime_1).count();
+    // std::cout << "imwrite func cost time: " << elapsedTime_1 << " s" << std::endl;
+
     std::cout << "Save reconstructed mat result as : " << output_result_path << std::endl;
 
-    return EXIT_SUCCESS;
+    return resultImage;
 }

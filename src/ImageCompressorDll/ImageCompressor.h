@@ -21,7 +21,7 @@ public:
     NvjpegCompressRunner();
     ~NvjpegCompressRunner();
     void compress(CompressConfiguration cfg);
-    void reconstruct(CompressConfiguration cfg , std::string ImageDirPath);
+    cv::Mat reconstruct(CompressConfiguration cfg , std::string ImageDirPath);
 };
 
 #pragma warning(pop)
