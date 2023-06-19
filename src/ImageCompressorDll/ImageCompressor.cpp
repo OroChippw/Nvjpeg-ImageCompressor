@@ -26,12 +26,15 @@ void NvjpegCompressRunner::compress(CompressConfiguration cfg)
     std::cout << "Compress func cost time: " << elapsedTime << " ms" << std::endl;
 }
 
-void NvjpegCompressRunner::reconstruct(CompressConfiguration cfg , std::string ImageDirPath)
+cv::Mat NvjpegCompressRunner::reconstruct(CompressConfiguration cfg , std::string ImageDirPath)
 {
+    struct stat buffer;
     auto startTime = std::chrono::steady_clock::now();
-    std::string run_state = compressor->ReconstructedImage(cfg , ImageDirPath) ? "Failure" : "Finish";
+    cv::Mat resultImage = compressor->ReconstructedImage(cfg , ImageDirPath);
+    std::string run_state = resultImage.empty() ? "Failure" : "Finish";
     auto endTime = std::chrono::steady_clock::now();
     std::cout << "=> Reconstructed " << run_state << std::endl;
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     std::cout << "Reconstruct func cost time: " << elapsedTime << " ms" << std::endl;
+    return resultImage;
 }
