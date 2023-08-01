@@ -17,7 +17,9 @@ int main()
     cfg.input_dir = inputFilePath;
     cfg.output_dir = CompressOutputFilePath;
     cfg.rebuild_dir = ReconstructedFilePath;
-
+    
+    /* If a line scan camera is used, the width of the image remains unchanged, 
+        and only the height of the image is divided*/ 
     cfg.width = 8320;
     cfg.height = 40000;
     
@@ -28,6 +30,7 @@ int main()
     cfg.save_mat = false;
     cfg.save_binary = true;
     cfg.do_val = false;
+    cfg.in_memory = true;
 
     cfg.do_crop = true;
     cfg.crop_ratio = 100;

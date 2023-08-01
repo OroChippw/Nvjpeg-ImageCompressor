@@ -17,6 +17,7 @@ struct CompressConfiguration {
     bool save_mat = false;
     bool save_binary = true;
     bool do_val = false;
+    bool in_memory = false;
 
     bool use_roi = false;
     int roi_w = 10;
