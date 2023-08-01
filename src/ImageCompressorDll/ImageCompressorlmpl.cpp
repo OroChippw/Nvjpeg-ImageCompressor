@@ -180,7 +180,7 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
         std::string filename = files_list[index].substr(iPos, files_list[index].length() - iPos);
         std::string name = filename.substr(0, filename.find("."));
         std::string savedir = cfg.output_dir + "\\" + name;
-        if (!std::filesystem::exists(savedir))
+        if (!std::filesystem::exists(savedir) && !cfg.in_memory)
         {
             std::filesystem::create_directories(savedir);
         }
@@ -217,6 +217,12 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
             for (unsigned int index = 0; index < image_lists.size(); index++)
             {
                 obuffer_lists.push_back(CompressWorker(cfg, image_lists[index]));
+            }
+
+            if (cfg.in_memory)
+            {
+                std::cout << "Return Obuffer lists" << std::endl;
+                return EXIT_SUCCESS;
             }
 
             std::string output_result_path;
@@ -273,7 +279,7 @@ int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
             // }
 
            if (!cfg.save_mat)
-            {   
+            { 
                 // std::cout << "cfg.save_mat : " <<  cfg.save_mat << std::endl;
                 for (auto file : result_path_lists)
                 {
@@ -429,10 +435,19 @@ int NvjpegCompressRunnerImpl::CompressImage(CompressConfiguration cfg)
             cfg.crop_ratio = CalculateGreatestFactor(cfg.width , cfg.height);
         }
     }
+    auto only_compress_startTime = std::chrono::steady_clock::now();
     if (Compress(cfg))
     {
         return EXIT_FAILURE;
     }
+    auto only_compress_endTime = std::chrono::steady_clock::now();
+    auto only_compress_elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(only_compress_endTime - only_compress_startTime).count();
+    if (cfg.in_memory)
+    {
+        std::cout << "=> Work in memory stream" << std::endl;
+    }
+    std::cout << "only Compress func cost time: " << only_compress_elapsedTime << " ms" << std::endl;
+
     return EXIT_SUCCESS;
 }
 
