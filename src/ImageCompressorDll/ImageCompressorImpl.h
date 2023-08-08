@@ -1,3 +1,10 @@
+/*********************************
+    Copyright: OroChippw
+    Author: OroChippw
+    Date: 2023.08.08
+    Description: The specific implementation 
+of NvjpegCompressRunnerImpl each module
+*********************************/
 #pragma once
 #pragma warning (disable:4819)
 
@@ -6,7 +13,6 @@
 #include <nvjpeg.h>
 
 #include "dirent.h"
-#include "CompressConfig.h"
 
 #define CHECK_CUDA(call)                                                    \
 {                                                                           \
@@ -28,18 +34,73 @@
     }                                                                       \
 }
 
+class EmptyFileException : public std::exception {
+    public:
+        const char* what() const noexcept override {
+            return "FileEmptyError";
+        }
+};
+
+class CompressedException : public std::exception {
+    public:
+        const char* what() const noexcept override {
+            return "CompressedException";
+        }
+};
+
+class ReconstructException : public std::exception {
+    public:
+        const char* what() const noexcept override {
+            return "ReconstructException";
+        }
+};
+
 class NvjpegCompressRunnerImpl
 {
 private:
     cv::Mat compress_image;
     std::vector<std::string> files_list;
 
-    double time_total;
+    /* Configuration */
+    int encode_quality = 95;
+    bool use_optimizedHuffman = true;
+    bool multi_stage = false;
+    bool show_diff_info = false;
+    bool save_mat = false;
+    bool save_binary = true;
+    bool do_val = false;
+    bool in_memory = true;
+    bool do_crop = false;
+    int crop_ratio = 100;
+
+    /* Image Properties */
+    int compress_image_width = 8320;
+    int compress_image_height = 40000;
+
+    /* Verifier */
+    double time_total = 0.0;
     double psnr_val_score; 
+
+    /* Compress Buffer List */
+    std::vector<std::vector<unsigned char>> obuffer_lists;
+    std::vector<cv::Mat> result_lists;
 
 public:
     NvjpegCompressRunnerImpl() {};
     ~NvjpegCompressRunnerImpl() {};
+
+public:
+    int CompressImage(std::vector<cv::Mat> image_matlist);
+    int ReconstructedImage(std::vector<std::vector<unsigned char>> obuffer_lists);
+
+public:
+    void setImageProperties(int width , int height);
+    void setEncodeQuality(int quality);
+    int getEncodeQuality();
+    void setOptimizedHuffman(bool optimize);
+    bool isOptimizedHuffman();
+    std::vector<std::vector<unsigned char>> getObufferList();
+    std::vector<cv::Mat> getResultList();
 
 private:
     /* 读入文件列表及相关图像前处理 */
@@ -48,24 +109,20 @@ private:
     int CalculateGreatestFactor(int m , int n);
 
     /* 执行压缩的组件 */
-    int Compress(CompressConfiguration cfg);
-    std::vector<unsigned char> CompressWorker(CompressConfiguration cfg , const cv::Mat Image);
+    int Compress(std::vector<cv::Mat> image_list);
+    std::vector<unsigned char> CompressWorker(const cv::Mat Image);
 
     /* 通过和原图对比计算均方误差和峰值信噪比以评估图像质量 */
     double CalculatePSNR(cv::Mat srcImage , cv::Mat compImage);
-    /* 通过和原图对比灰度均值及标准差以评估图像质量 */
-    void CalculateGrayAvgStdDev(cv::Mat&src , double& avg , double &stddev);
     /* 计算原图和压缩图的差异图 */
-    cv::Mat CalculateDiffmap(CompressConfiguration cfg , const cv::Mat srcImage , const std::string compImagePath);
+    cv::Mat CalculateDiffmap(const cv::Mat srcImage , const std::string compImagePath);
     
     /* 通过压缩图还原原图 */
-    cv::Mat Reconstructed(cv::Mat Image1 , cv::Mat Image2);
-    cv::Mat Binaryfile2Mat(CompressConfiguration cfg , std::string ImagePath);
-    cv::Mat MergeBinImage(CompressConfiguration cfg , std::vector<std::string> bin_files);
+    int Reconstructed(std::vector<std::vector<unsigned char>> obuffer_lists);
+    cv::Mat ReconstructWorker(const std::vector<unsigned char> obuffer);
     
-public:
-    int CompressImage(CompressConfiguration cfg);
-    double CalculateDiffImagePSNR(const cv::Mat image1 , const std::string ImagePath2);
-    cv::Mat ReconstructedImage(CompressConfiguration cfg , std::string ImageDirPath);
-
+    /* Other */
+    bool cmp(const std::string& str1, const std::string& str2);
+    cv::Mat addImage(cv::Mat image_1 , cv::Mat image_2);
+    cv::Mat Binaryfile2Mat(std::string ImagePath);
 };

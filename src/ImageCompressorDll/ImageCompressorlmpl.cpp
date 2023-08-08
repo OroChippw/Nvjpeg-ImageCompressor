@@ -1,3 +1,9 @@
+/*********************************
+    Copyright: OroChippw
+    Author: OroChippw
+    Date: 2023.08.08
+    Description: Define each module of NvjpegCompressRunnerImpl
+*********************************/
 # pragma warning (disable:4819)
 # pragma warning (disable:4996)
 
@@ -7,7 +13,46 @@
 #include <opencv2/opencv.hpp>
 
 #include "ImageCompressorImpl.h"
-#include "CompressConfig.h"
+
+/* Setting & Getting Function */
+
+void NvjpegCompressRunnerImpl::setImageProperties(int width , int height)
+{
+    compress_image_width = width;
+    compress_image_height = height;
+}
+
+void NvjpegCompressRunnerImpl::setEncodeQuality(int quality)
+{
+    encode_quality = quality;
+}
+
+int NvjpegCompressRunnerImpl::getEncodeQuality()
+{
+    return encode_quality;
+}
+
+void NvjpegCompressRunnerImpl::setOptimizedHuffman(bool optimize)
+{
+    use_optimizedHuffman = optimize;
+}
+
+bool NvjpegCompressRunnerImpl::isOptimizedHuffman()
+{
+    return use_optimizedHuffman;
+}
+
+std::vector<std::vector<unsigned char>> NvjpegCompressRunnerImpl::getObufferList()
+{
+    return obuffer_lists;
+}
+
+std::vector<cv::Mat> NvjpegCompressRunnerImpl::getResultList()
+{
+    return result_lists;
+}
+
+/* Preprocess Function */
 
 int NvjpegCompressRunnerImpl::ReadInput(const std::string input_path)
 {
@@ -86,14 +131,58 @@ std::vector<cv::Mat> NvjpegCompressRunnerImpl::CropImage(const cv::Mat Image, in
     return crop_list;
 }
 
-std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(CompressConfiguration cfg, const cv::Mat Image)
+cv::Mat NvjpegCompressRunnerImpl::Binaryfile2Mat(std::string ImagePath)
+{
+    cv::Mat Image;
+    FILE* pfile = fopen(ImagePath.c_str(), "rb");
+    if (pfile == NULL)
+        return Image;
+
+    fseek(pfile, 0, SEEK_END);
+    const unsigned int length = ftell(pfile);
+    fseek(pfile, 0, SEEK_SET);
+    if (length <= 0)
+    {
+        fclose(pfile);
+        return Image;
+    }
+    unsigned char* pre_image = new unsigned char[length];
+    size_t data = fread(pre_image, 1, length, pfile);
+    fclose(pfile);
+
+    std::vector<unsigned char> buffer(pre_image, pre_image + data);
+    Image = imdecode(buffer, cv::IMREAD_ANYCOLOR);
+
+    delete[]pre_image;
+
+    return Image;
+}
+
+bool NvjpegCompressRunnerImpl::cmp(const std::string& str1, const std::string& str2)
+{
+    std::string::size_type iPos = str1.find_last_of('/') + 1;
+    std::string filename = str1.substr(iPos, str1.length() - iPos);
+    std::string num1 = filename.substr(0, filename.find("."));
+    int num1_ = std::stoi(num1);
+
+    std::string::size_type iPos2 = str2.find_last_of('/') + 1;
+    std::string filename2 = str2.substr(iPos2, str2.length() - iPos2);
+    std::string num2 = filename2.substr(0, filename2.find("."));
+    int num2_ = std::stoi(num2);
+
+    return (num1_ < num2_);
+}
+
+/* Compress Function */
+
+std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(const cv::Mat Image)
 {
     const unsigned int image_width = Image.cols;
     const unsigned int image_height = Image.rows;
     const unsigned int channel_size = image_width * image_height;
     std::cout << "[COMPRESS IMAGE INFO] width : " << image_width << " height : " << image_height << std::endl;
 
-    /* nvjpeg init*/
+    /* nvjpeg init */
     nvjpegHandle_t nvjpeg_handle;
     nvjpegEncoderState_t encoder_state; // 存储用于压缩中间缓冲区和变量的结构体
     nvjpegEncoderParams_t encoder_params; // 存储用于JPEG压缩参数的结构体
@@ -118,8 +207,8 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(CompressConf
         nvjpegEncoderParamsSetOptimizedHuffman设置是否使用优化的Huffman编码，
         使用优化的Huffman生成更小的JPEG比特流，质量相同但性能较慢,第二个参数值默认为0不使用优化Huffman编码
     */
-    nvjpegEncoderParamsSetOptimizedHuffman(encoder_params, cfg.use_optimizedHuffman, NULL);
-    nvjpegEncoderParamsSetQuality(encoder_params, cfg.encode_quality, NULL); // 设置质量参数
+    nvjpegEncoderParamsSetOptimizedHuffman(encoder_params, use_optimizedHuffman, NULL);
+    nvjpegEncoderParamsSetQuality(encoder_params, encode_quality, NULL); // 设置质量参数
     nvjpegEncoderParamsSetSamplingFactors(encoder_params, nvjpegChromaSubsampling_t::NVJPEG_CSS_422, NULL); // 设置用于JPEG压缩的色度子采样参数，官方默认为NVJPEG_CSS_444
 
     nvjpegImage_t input; // 输入图像数据指针为显式指针，每个颜色分量分别存储
@@ -169,140 +258,136 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(CompressConf
     return obuffer;
 }
 
-int NvjpegCompressRunnerImpl::Compress(CompressConfiguration cfg)
+int NvjpegCompressRunnerImpl::Compress(std::vector<cv::Mat> image_list)
 {
-    int stage_num = cfg.multi_stage ? 2 : 1;
     std::cout << "# ----------------------------------------------- #" << std::endl;
-    for (unsigned int index = 0; index < files_list.size(); index++)
+    time_total = 0.0;     
+    try
     {
-        std::cout << "=> Processing: " << files_list[index] << std::endl;
-        std::string::size_type iPos = files_list[index].find_last_of('\\') + 1;
-        std::string filename = files_list[index].substr(iPos, files_list[index].length() - iPos);
-        std::string name = filename.substr(0, filename.find("."));
-        std::string savedir = cfg.output_dir + "\\" + name;
-        if (!std::filesystem::exists(savedir) && !cfg.in_memory)
+        for (unsigned int index = 0; index < image_list.size(); index++)
         {
-            std::filesystem::create_directories(savedir);
+            obuffer_lists.push_back(CompressWorker(image_list[index]));
         }
-
-        cv::Mat diffmap;
-        time_total = 0.0;
-        psnr_val_score = 0.0;
-
-        for (int stage_index = 0; stage_index < stage_num; stage_index++)
-        {
-            cv::Mat srcImage;
-            if (stage_index == 0)
-            {
-                srcImage = cv::imread(files_list[index], cv::IMREAD_COLOR);
-                std::cout << "=> Enter secondary compression stage 1 ..." << std::endl;
-            }
-            else
-            {
-                srcImage = diffmap;
-                std::cout << "=> Enter secondary compression stage 2 ..." << std::endl;
-            }
-
-            std::vector<cv::Mat> image_lists;
-            if (cfg.do_crop)
-            {
-                image_lists = CropImage(srcImage, cfg.crop_ratio);
-            }
-            else
-            {
-                image_lists.emplace_back(srcImage);
-            }
-
-            std::vector<std::vector<unsigned char>> obuffer_lists;
-            for (unsigned int index = 0; index < image_lists.size(); index++)
-            {
-                obuffer_lists.push_back(CompressWorker(cfg, image_lists[index]));
-            }
-
-            if (cfg.in_memory)
-            {
-                std::cout << "Return Obuffer lists" << std::endl;
-                return EXIT_SUCCESS;
-            }
-
-            std::string output_result_path;
-            std::vector<std::string> result_path_lists;
-
-            for (unsigned int index = 0; index < obuffer_lists.size(); index++)
-            {
-                if (cfg.save_mat)
-                {
-                    output_result_path = savedir + "\\" + std::to_string(index) + ".png";
-                    std::ofstream outputFile(output_result_path, std::ios::out | std::ios::binary);
-                    outputFile.write(reinterpret_cast<const char*>(obuffer_lists[index].data()), static_cast<int>(obuffer_lists[index].size()));
-                    outputFile.close();
-                    // std::cout << "Save compress mat result as : " << output_result_path << std::endl;
-                    result_path_lists.emplace_back(output_result_path);
-                }
-                
-                if (cfg.save_binary)
-                {
-                    std::string output_result_bin_path = savedir + "\\" + std::to_string(index) + ".bin";
-                    std::ofstream outputBinFile(output_result_bin_path, std::ios::out | std::ios::binary);
-                    outputBinFile.write(reinterpret_cast<const char*>(obuffer_lists[index].data()), static_cast<int>(obuffer_lists[index].size()));
-                    outputBinFile.close();
-                    // std::cout << "Save compress bin result as : " << output_result_bin_path << std::endl;
-                }
-            }
-
-            if (stage_index != 0)
-            {
-                if (!cfg.save_mat)
-                {   
-                    std::cout << "cfg.save_mat : " <<  cfg.save_mat << std::endl;
-                    for (auto file : result_path_lists)
-                    {
-                        std::string remove_status = (remove(file.c_str()) == 0) ? "Successfully" : "Failure" ;
-                        std::cout << "Delete file " << file << " " << remove_status << std::endl;
-                    }
-                }
-                continue; /* 当进行二次压缩时不再需要计算差异图 */
-            }
-
-            /* 计算输入图和压缩图的峰值信噪比 */
-            if (cfg.do_val)
-            {
-                for (unsigned int index = 0; index < result_path_lists.size(); index++)
-                {
-                    psnr_val_score += CalculateDiffImagePSNR(image_lists[index], result_path_lists[index]);
-                }
-            }
-
-            // for (unsigned int index = 0 ; index < result_path_lists.size() ; index++)
-            // {
-            //     diffmap = CalculateDiffmap(cfg , files_list[index] , output_result_path);
-            // }
-
-           if (!cfg.save_mat)
-            { 
-                // std::cout << "cfg.save_mat : " <<  cfg.save_mat << std::endl;
-                for (auto file : result_path_lists)
-                {
-                    std::string remove_status = (remove(file.c_str()) == 0) ? "Successfully" : "Failure" ;
-                    std::cout << "Delete file " << file << " " << remove_status << std::endl;
-                }
-            }
-        }
+    }  
+    catch (const std::exception& e) 
+    {
+        throw CompressedException();
+        
+        return EXIT_FAILURE;
     }
 
     std::cout << "# ----------------------------------------------- #" << std::endl;
-    std::cout << files_list.size() << " Images mean Cost time : " << time_total / files_list.size() << "ms" << std::endl;
-    std::cout << files_list.size() << " Images mean PSNR  : " << psnr_val_score / files_list.size() << "dB" << std::endl;
-
+    std::cout << image_list.size() << " Images mean Cost time : " << time_total / image_list.size() << "ms" << std::endl;
+    
     return EXIT_SUCCESS;
 }
 
-cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(CompressConfiguration cfg, const cv::Mat srcImage, const std::string compImagePath)
+int NvjpegCompressRunnerImpl::CompressImage(std::vector<cv::Mat> image_matlist)
+{
+    std::vector<cv::Mat> image_lists;
+    std::cout << "=> Start image compression ... " << std::endl;
+    if (do_crop)
+    {
+        if (!((compress_image_width % crop_ratio == 0) && (compress_image_width % crop_ratio == 0)))
+        {
+            std::cout << "The width and height of the image must be divisible by the number of blocks" << std::endl;
+            std::cout << "=> Calculate the greatest common factor of width and height" << std::endl;
+            crop_ratio = CalculateGreatestFactor(compress_image_width , compress_image_width);
+        }
+        for (unsigned int index = 0 ; index < image_matlist.size() ; index++)
+        {
+            image_lists = CropImage(image_matlist[index] , crop_ratio);
+        }
+    }else{
+        image_lists = image_matlist;
+    }
+    auto only_compress_startTime = std::chrono::steady_clock::now();
+
+    if (Compress(image_lists))
+    {
+        return EXIT_FAILURE;
+    }
+
+    auto only_compress_endTime = std::chrono::steady_clock::now();
+    auto only_compress_elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(only_compress_endTime - only_compress_startTime).count();
+    std::cout << "Only Compress func cost time: " << only_compress_elapsedTime << " ms" << std::endl;
+    
+    return EXIT_SUCCESS;
+}
+
+/* Reconstruct Function */
+
+cv::Mat NvjpegCompressRunnerImpl::ReconstructWorker(const std::vector<unsigned char> obuffer)
+{
+    // unsigned int after_crop_width = compress_image_width / crop_ratio;
+    // unsigned int after_crop_height = compress_image_height / crop_ratio;
+
+    // std::sort(bin_files.begin(), bin_files.end(), cmp);
+    // std::vector<cv::Mat> image_list;
+    // for (int i = 0; i < bin_files.size(); i++)
+    // {
+    //     image_list.emplace_back(Binaryfile2Mat(bin_files[i]));
+    // }
+
+    // int sum_num = crop_ratio * crop_ratio;
+    // int index = 0, index_x = 0, index_y = 0;
+    // cv::Mat resultImage = cv::Mat::zeros(compress_image_height, compress_image_width, image_list[0].type());
+
+    // for (int i = 1; i <= crop_ratio; i++)
+    // {
+    //     for (int j = 1; j <= crop_ratio; j++)
+    //     {
+    //         image_list[index].copyTo(resultImage(cv::Rect(index_x, index_y, image_list[index].cols, image_list[index].rows)));
+    //         index_y += (after_crop_height);
+    //         index += 1;
+    //     }
+    //     index_x += (after_crop_width);
+    //     index_y = 0;
+    // }
+    
+    cv::Mat resultImage = cv::imdecode(obuffer , cv::IMREAD_ANYCOLOR);
+
+    return resultImage;
+}
+
+int NvjpegCompressRunnerImpl::Reconstructed(std::vector<std::vector<unsigned char>> obuffer_lists)
+{
+    try
+    {
+        for (unsigned int index = 0; index < obuffer_lists.size(); index++)
+        {
+            result_lists.emplace_back(ReconstructWorker(obuffer_lists[index]));
+        }
+    }
+    catch (const std::exception& e) 
+    {
+        throw ReconstructException();
+        
+        return EXIT_FAILURE;
+    }
+    
+    return EXIT_SUCCESS;
+}
+
+int NvjpegCompressRunnerImpl::ReconstructedImage(std::vector<std::vector<unsigned char>> obuffer_lists)
+{
+    std::cout << "=> Start image reconstruction ... " << std::endl;   
+    if (Reconstructed(obuffer_lists))
+    {
+        return EXIT_FAILURE;
+    }
+    
+    return EXIT_SUCCESS;
+}
+
+/* Calculate indicator function */
+
+cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(const cv::Mat srcImage, const std::string compImagePath)
 {
     cv::Mat compressImage = cv::imread(compImagePath, cv::IMREAD_ANYCOLOR);
     cv::Mat diffMap = srcImage - compressImage;
 
-    if (cfg.show_diff_info)
+    if (show_diff_info)
     {
         double minVal, maxVal;
         cv::Point minIdx, maxIdx;
@@ -322,30 +407,6 @@ cv::Mat NvjpegCompressRunnerImpl::CalculateDiffmap(CompressConfiguration cfg, co
         cv::meanStdDev(diffMap, meanMat, stddevMat);
         std::cout << "diffMap MeanMat : " << meanMat << std::endl;
         std::cout << "diffMap stddevMat : " << stddevMat << std::endl;
-    }
-
-    if (cfg.use_roi)
-    {
-        double avgGray_crop = 0.0;
-        double stddevGray_crop = 0.0;
-        double avgGray_compress = 0.0;
-        double stddevGray_compress = 0.0;
-        cv::Mat srcImage_roi = srcImage(cfg.roi_rect);
-        cv::Mat compressImage_roi = compressImage(cfg.roi_rect);
-
-        CalculateGrayAvgStdDev(srcImage_roi, avgGray_crop, stddevGray_crop);
-        std::cout << "avgGray_crop : " << avgGray_crop << std::endl;
-        std::cout << "stddevGray_crop : " << stddevGray_crop << std::endl;
-
-        CalculateGrayAvgStdDev(compressImage_roi, avgGray_compress, stddevGray_compress);
-        std::cout << "avgGray_compress : " << avgGray_compress << std::endl;
-        std::cout << "stddevGray_compress : " << stddevGray_compress << std::endl;
-
-        std::cout << "avgGray_diff : " << abs(avgGray_compress - avgGray_crop) << std::endl;
-        std::cout << "stddevGray_diff : " << abs(stddevGray_compress - stddevGray_crop) << std::endl;
-
-        double cropPSNR = CalculatePSNR(srcImage_roi, compressImage_roi);
-        std::cout << "cropPSNR : " << cropPSNR << std::endl;
     }
 
     return diffMap;
@@ -370,25 +431,6 @@ double NvjpegCompressRunnerImpl::CalculatePSNR(cv::Mat srcImage, cv::Mat compIma
         std::cout << "[VAL->MSE] : " << mse << " [VAL->PSNR] : " << psnr << std::endl;
         return psnr;
     }
-}
-
-void NvjpegCompressRunnerImpl::CalculateGrayAvgStdDev(cv::Mat& src, double& avg, double& stddev)
-{
-    cv::Mat img, mean, stdDev;
-    if (src.channels() == 3)
-        cv::cvtColor(src, img, cv::COLOR_BGR2GRAY);
-    else
-        img = src;
-    cv::mean(src);
-    cv::meanStdDev(img, mean, stdDev);
-
-    avg = mean.ptr<double>(0)[0];
-    stddev = stdDev.ptr<double>(0)[0];
-}
-
-cv::Mat NvjpegCompressRunnerImpl::Reconstructed(cv::Mat Image1, cv::Mat Image2)
-{
-    return Image1 + Image2;
 }
 
 int NvjpegCompressRunnerImpl::CalculateGreatestFactor(const int width , const int height)
@@ -422,164 +464,7 @@ int NvjpegCompressRunnerImpl::CalculateGreatestFactor(const int width , const in
 	return factor;
 }
 
-int NvjpegCompressRunnerImpl::CompressImage(CompressConfiguration cfg)
+cv::Mat NvjpegCompressRunnerImpl::addImage(cv::Mat image_1, cv::Mat image_2)
 {
-    int read_state = ReadInput(cfg.input_dir);
-    std::cout << "=> Start image compression ... " << std::endl;
-    if (cfg.do_crop)
-    {
-        if (!((cfg.width % cfg.crop_ratio == 0) && (cfg.height % cfg.crop_ratio == 0)))
-        {
-            std::cout << "The width and height of the image must be divisible by the number of blocks" << std::endl;
-            std::cout << "=> Calculate the greatest common factor of width and height" << std::endl;
-            cfg.crop_ratio = CalculateGreatestFactor(cfg.width , cfg.height);
-        }
-    }
-    auto only_compress_startTime = std::chrono::steady_clock::now();
-    if (Compress(cfg))
-    {
-        return EXIT_FAILURE;
-    }
-    auto only_compress_endTime = std::chrono::steady_clock::now();
-    auto only_compress_elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(only_compress_endTime - only_compress_startTime).count();
-    if (cfg.in_memory)
-    {
-        std::cout << "=> Work in memory stream" << std::endl;
-    }
-    std::cout << "only Compress func cost time: " << only_compress_elapsedTime << " ms" << std::endl;
-
-    return EXIT_SUCCESS;
-}
-
-double NvjpegCompressRunnerImpl::CalculateDiffImagePSNR(const cv::Mat image1, const std::string ImagePath2)
-{
-    cv::Mat image2 = cv::imread(ImagePath2, cv::IMREAD_ANYCOLOR);
-    double psnr = CalculatePSNR(image1, image2);
-
-    return psnr;
-}
-
-cv::Mat NvjpegCompressRunnerImpl::Binaryfile2Mat(CompressConfiguration cfg, std::string ImagePath)
-{
-    cv::Mat Image;
-    FILE* pfile = fopen(ImagePath.c_str(), "rb");
-    if (pfile == NULL)
-        return Image;
-
-    fseek(pfile, 0, SEEK_END);
-    const unsigned int length = ftell(pfile);
-    fseek(pfile, 0, SEEK_SET);
-    if (length <= 0)
-    {
-        fclose(pfile);
-        return Image;
-    }
-    unsigned char* pre_image = new unsigned char[length];
-    size_t data = fread(pre_image, 1, length, pfile);
-    fclose(pfile);
-
-    std::vector<unsigned char> buffer(pre_image, pre_image + data);
-    Image = imdecode(buffer, cv::IMREAD_ANYCOLOR);
-
-    delete[]pre_image;
-
-    return Image;
-}
-
-
-bool cmp(const std::string& str1, const std::string& str2)
-{
-    std::string::size_type iPos = str1.find_last_of('/') + 1;
-    std::string filename = str1.substr(iPos, str1.length() - iPos);
-    std::string num1 = filename.substr(0, filename.find("."));
-    int num1_ = std::stoi(num1);
-
-    std::string::size_type iPos2 = str2.find_last_of('/') + 1;
-    std::string filename2 = str2.substr(iPos2, str2.length() - iPos2);
-    std::string num2 = filename2.substr(0, filename2.find("."));
-    int num2_ = std::stoi(num2);
-
-    return (num1_ < num2_);
-}
-
-cv::Mat NvjpegCompressRunnerImpl::MergeBinImage(CompressConfiguration cfg, std::vector<std::string> bin_files)
-{
-    unsigned int after_crop_width = cfg.width / cfg.crop_ratio;
-    unsigned int after_crop_height = cfg.height / cfg.crop_ratio;
-
-    std::sort(bin_files.begin(), bin_files.end(), cmp);
-    std::vector<cv::Mat> image_list;
-    // auto startTime = std::chrono::steady_clock::now();
-    for (int i = 0; i < bin_files.size(); i++)
-    {
-        image_list.emplace_back(Binaryfile2Mat(cfg, bin_files[i]));
-    }
-    // auto endTime = std::chrono::steady_clock::now();
-    // auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
-    // std::cout << "Binaryfile2Mat func cost time: " << elapsedTime << " s" << std::endl;
-
-    int sum_num = cfg.crop_ratio * cfg.crop_ratio;
-    int index = 0, index_x = 0, index_y = 0;
-    cv::Mat resultImage = cv::Mat::zeros(cfg.height, cfg.width, image_list[0].type());
-
-    for (int i = 1; i <= cfg.crop_ratio; i++)
-    {
-        for (int j = 1; j <= cfg.crop_ratio; j++)
-        {
-            image_list[index].copyTo(resultImage(cv::Rect(index_x, index_y, image_list[index].cols, image_list[index].rows)));
-            index_y += (after_crop_height);
-            index += 1;
-        }
-        index_x += (after_crop_width);
-        index_y = 0;
-    }
-   
-    return resultImage;
-}
-
-
-cv::Mat NvjpegCompressRunnerImpl::ReconstructedImage(CompressConfiguration cfg, std::string ImageDirPath)
-{
-    std::cout << "=> Start image reconstruction ... " << std::endl;
-    cv::Mat resultImage;
-    struct stat buffer;
-    if (!((stat(ImageDirPath.c_str(), &buffer) == 0)))
-        return resultImage;
-    if (cfg.do_crop)
-    {
-        if (!((cfg.width % cfg.crop_ratio == 0) && (cfg.height % cfg.crop_ratio == 0)))
-        {
-            std::cout << "The width and height of the image must be divisible by the number of blocks" << std::endl;
-            std::cout << "=> Calculate the greatest common factor of width and height" << std::endl;
-            cfg.crop_ratio = CalculateGreatestFactor(cfg.width , cfg.height);
-        }
-    }
-    std::vector<std::string> bin_files;
-    std::vector<cv::String> images_files;
-    // std::string image_jpg_path = ImageDirPath + "//*.jpg";
-    std::string image_bin_path = ImageDirPath + "//*.bin";
-    // cv::glob(image_jpg_path, images_files);
-    cv::glob(image_bin_path, bin_files);
-
-    // auto startTime = std::chrono::steady_clock::now();
-
-    if (bin_files.size() != 0)
-    {
-        resultImage = MergeBinImage(cfg, bin_files);
-    }
-    // auto endTime = std::chrono::steady_clock::now();
-    // auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
-    // std::cout << "MergeBinImage func cost time: " << elapsedTime << " s" << std::endl;
-
-
-    std::string output_result_path = cfg.rebuild_dir + "\\E.png";
-    // auto startTime_1 = std::chrono::steady_clock::now();
-    // cv::imwrite(output_result_path, resultImage);
-    // auto endTime_1 = std::chrono::steady_clock::now();
-    // auto elapsedTime_1 = std::chrono::duration_cast<std::chrono::seconds>(endTime_1 - startTime_1).count();
-    // std::cout << "imwrite func cost time: " << elapsedTime_1 << " s" << std::endl;
-
-    std::cout << "Save reconstructed mat result as : " << output_result_path << std::endl;
-
-    return resultImage;
+    return image_1 + image_2;
 }

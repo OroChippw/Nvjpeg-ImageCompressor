@@ -1,3 +1,9 @@
+/*********************************
+    Copyright: OroChippw
+    Author: OroChippw
+    Date: 2023.08.08
+    Description: Implementation of the external wrapper class NvjpegCompressRunner
+*********************************/
 #include <iostream>
 #include <chrono>
 
@@ -7,34 +13,49 @@
 NvjpegCompressRunner::NvjpegCompressRunner()
 {
     compressor = new NvjpegCompressRunnerImpl();
-    std::cout << "=> Build NvjpegCompressRunnerImpl successfully ..." << std::endl;
+    std::cout << "=> Build NvjpegCompressRunnerImpl Successfully ..." << std::endl;
 }
 
 NvjpegCompressRunner::~NvjpegCompressRunner()
 {
     delete compressor;
-    std::cout << "=> Delete NvjpegCompressRunnerImpl successfully ..." << std::endl;
+    std::cout << "=> Delete NvjpegCompressRunnerImpl Successfully ..." << std::endl;
 }
 
-void NvjpegCompressRunner::compress(CompressConfiguration cfg)
+void NvjpegCompressRunner::init(int width , int height , int quality=95 , bool optimize=true)
 {
-    auto startTime = std::chrono::steady_clock::now();
-    std::string run_state = compressor->CompressImage(cfg) ? "Failure" : "Finish";
-    auto endTime = std::chrono::steady_clock::now();
-    std::cout << "=> Compress " << run_state << std::endl;
-    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    std::cout << "Compress func cost time: " << elapsedTime << " ms" << std::endl;
+    compressor->setEncodeQuality(quality);
+    compressor->setImageProperties(width , height);
+    compressor->setOptimizedHuffman(optimize);
+    std::cout << "=> Initial NvjpegCompressRunnerImpl Properties Successfully ..." << std::endl;
 }
 
-cv::Mat NvjpegCompressRunner::reconstruct(CompressConfiguration cfg , std::string ImageDirPath)
+std::vector<std::vector<unsigned char>> NvjpegCompressRunner::compress(std::vector<cv::Mat> image_matlist)
 {
-    struct stat buffer;
     auto startTime = std::chrono::steady_clock::now();
-    cv::Mat resultImage = compressor->ReconstructedImage(cfg , ImageDirPath);
-    std::string run_state = resultImage.empty() ? "Failure" : "Finish";
+
+    std::string run_state = compressor->CompressImage(image_matlist) ? "Failure" : "Finish";
+
     auto endTime = std::chrono::steady_clock::now();
-    std::cout << "=> Reconstructed " << run_state << std::endl;
+    
+    std::cout << "=> Compress Result : " << run_state << std::endl;
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    std::cout << "Reconstruct func cost time: " << elapsedTime << " ms" << std::endl;
-    return resultImage;
+    std::cout << "NvjpegCompressRunner Compress Func Cost Time : " << elapsedTime << " ms" << std::endl;
+
+    return compressor->getObufferList();
+}
+
+std::vector<cv::Mat> NvjpegCompressRunner::reconstruct(std::vector<std::vector<unsigned char>> obuffer_lists)
+{
+    auto startTime = std::chrono::steady_clock::now();
+
+    std::string run_state = compressor->ReconstructedImage(obuffer_lists) ? "Failure" : "Finish";
+
+    auto endTime = std::chrono::steady_clock::now();
+    
+    std::cout << "=> Reconstructed Result : " << run_state << std::endl;
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    std::cout << "NvjpegCompressRunner Reconstruct Func Cost Time : " << elapsedTime << " ms" << std::endl;
+
+    return compressor->getResultList();
 }
