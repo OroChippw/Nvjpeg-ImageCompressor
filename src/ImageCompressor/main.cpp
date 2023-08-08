@@ -1,65 +1,56 @@
+/*********************************
+    Copyright: OroChippw
+    Author: OroChippw
+    Date: 2023.08.08
+    Description: Call Nvjpeg image compression demonstration
+*********************************/
 #include <iostream>
 #include <opencv2/core.hpp>
+#include <opencv2/opencv.hpp>
 #include <cuda_runtime.h>
 
-#include "../ImageCompressorDll/CompressConfig.h"
 #include "../ImageCompressorDll/ImageCompressor.h"
 
-
-
-int main()
+int main(int argc , char* argv[])
 {
-    std::string inputFilePath = "..//data//test";
-    std::string CompressOutputFilePath = "..//data//compress_result";
-    std::string ReconstructedFilePath = "..//data//reconstruct_result";
+    std::string input_dirPath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\test";
+    // std::string CompressOutputFilePath = "..//data//compress_result";
+    // std::string reconstruct_dirPath = "..//data//compress_result//9-3";
 
-    CompressConfiguration cfg;
-    cfg.input_dir = inputFilePath;
-    cfg.output_dir = CompressOutputFilePath;
-    cfg.rebuild_dir = ReconstructedFilePath;
+    int width = 8320; // require value
+    int height = 40000; // required value
+    int encode_quality = 95; // default value : true
+    bool use_optimizedHuffman = true; // default value : true
     
-    /* If a line scan camera is used, the width of the image remains unchanged, 
-        and only the height of the image is divided*/ 
-    cfg.width = 8320;
-    cfg.height = 40000;
-    
-    cfg.encode_quality = 95;
-    cfg.use_optimizedHuffman = true;
-    cfg.multi_stage = false;
-    cfg.show_diff_info = false;
-    cfg.save_mat = false;
-    cfg.save_binary = true;
-    cfg.do_val = false;
-    cfg.in_memory = true;
+    std::vector<cv::Mat> image_matlist;
+    std::vector<cv::String> image_filelist;
+    cv::glob(input_dirPath , image_filelist);
 
-    cfg.do_crop = true;
-    cfg.crop_ratio = 100;
-    
-    cfg.use_roi = false;
-    if (cfg.use_roi)
+    for (const auto& file : image_filelist)
     {
-        cfg.roi_w = 30;
-        cfg.roi_h = 30;
-        cfg.roi_rect = cv::Rect( 6648 , 22230 , cfg.roi_w , cfg.roi_h);
+        std::cout << "File : " << file << std::endl;
+        image_matlist.emplace_back(cv::imread(file , cv::IMREAD_COLOR));
     }
-    
-    if (!(cfg.save_mat || cfg.save_binary))
-    {
-        std::cout << "Choice save as mat or binary file." << std::endl;
-        return EXIT_FAILURE;
-    }
+    std::cout << "Image list size : " << image_matlist.size() << std::endl;
 
-    /* Init compressor*/    
+    /* Init compressor properties */ 
     NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
+    compressor->init(width , height , encode_quality , use_optimizedHuffman);
 
     /* Compress Samples */
-    compressor->compress(cfg);
+    std::vector<std::vector<unsigned char>> obuffer_lists = compressor->compress(image_matlist);
+    std::cout << "Compress buffer list size : " << obuffer_lists.size() << std::endl;
 
     /* Reconstruct Samples */
-    std::string reconstruct_path = "..//data//compress_result//9-3";
+    std::vector<cv::Mat> reconstructImageList = compressor->reconstruct(obuffer_lists);
+    std::cout << "Reconstruct image list size : " << reconstructImageList.size() << std::endl;
 
-    cv::Mat reconstructImage = compressor->reconstruct(cfg , reconstruct_path);
-    
+    std::string ReconstructedFilePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result";
+    for (unsigned int index = 0 ; index < reconstructImageList.size() ; index++)
+    {
+        std::string savePath = ReconstructedFilePath + "//" + std::to_string(index) + ".png";
+        cv::imwrite(savePath , reconstructImageList[index]);
+    }
 
     return EXIT_SUCCESS;
 }
