@@ -34,20 +34,6 @@ of NvjpegCompressRunnerImpl each module
     }                                                                       \
 }
 
-class EmptyFileException : public std::exception {
-    public:
-        const char* what() const noexcept override {
-            return "FileEmptyError";
-        }
-};
-
-class CompressedException : public std::exception {
-    public:
-        const char* what() const noexcept override {
-            return "CompressedException";
-        }
-};
-
 class ReconstructException : public std::exception {
     public:
         const char* what() const noexcept override {
@@ -103,21 +89,21 @@ public:
     std::vector<cv::Mat> getResultList();
 
 private:
-    /* 读入文件列表及相关图像前处理 */
+    /* Read file list and image pre-processing */
     int ReadInput(const std::string input_path);
     std::vector<cv::Mat> CropImage(const cv::Mat Image , int crop_ratio);
     int CalculateGreatestFactor(int m , int n);
 
-    /* 执行压缩的组件 */
+    /* Components that perform compression */
     int Compress(std::vector<cv::Mat> image_list);
     std::vector<unsigned char> CompressWorker(const cv::Mat Image);
 
-    /* 通过和原图对比计算均方误差和峰值信噪比以评估图像质量 */
+    /* Calculate the MSE and PSNR to evaluate the image quality */
     double CalculatePSNR(cv::Mat srcImage , cv::Mat compImage);
-    /* 计算原图和压缩图的差异图 */
+    /* Calculate the difference map */
     cv::Mat CalculateDiffmap(const cv::Mat srcImage , const std::string compImagePath);
     
-    /* 通过压缩图还原原图 */
+    /* Components that perform refactoring */
     int Reconstructed(std::vector<std::vector<unsigned char>> obuffer_lists);
     cv::Mat ReconstructWorker(const std::vector<unsigned char> obuffer);
     

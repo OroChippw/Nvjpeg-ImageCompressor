@@ -22,10 +22,10 @@ NvjpegCompressRunner::~NvjpegCompressRunner()
     std::cout << "=> Delete NvjpegCompressRunnerImpl Successfully ..." << std::endl;
 }
 
-void NvjpegCompressRunner::init(int width , int height , int quality=95 , bool optimize=true)
+void NvjpegCompressRunner::init(int quality=95 , bool optimize=true)
 {
     compressor->setEncodeQuality(quality);
-    compressor->setImageProperties(width , height);
+    // compressor->setImageProperties(width , height);
     compressor->setOptimizedHuffman(optimize);
     std::cout << "=> Initial NvjpegCompressRunnerImpl Properties Successfully ..." << std::endl;
 }
