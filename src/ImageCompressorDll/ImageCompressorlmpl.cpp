@@ -224,8 +224,7 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(const cv::Ma
     }
 
     CHECK_CUDA(cudaEventRecord(ev_start));
-    CHECK_NVJPEG(nvjpegEncodeImage(nvjpeg_handle, encoder_state, encoder_params, &input, input_format,
-        image_width, image_height, NULL));
+    CHECK_NVJPEG(nvjpegEncodeImage(nvjpeg_handle, encoder_state, encoder_params, &input, input_format, image_width, image_height, NULL));
     CHECK_CUDA(cudaEventRecord(ev_end));
 
     std::vector<unsigned char> obuffer;
@@ -271,7 +270,7 @@ int NvjpegCompressRunnerImpl::Compress(std::vector<cv::Mat> image_list)
     }  
     catch (const std::exception& e) 
     {
-        throw CompressedException();
+        std::cerr << "Exception caught: " << e.what() << std::endl;
         
         return EXIT_FAILURE;
     }
@@ -361,7 +360,7 @@ int NvjpegCompressRunnerImpl::Reconstructed(std::vector<std::vector<unsigned cha
     }
     catch (const std::exception& e) 
     {
-        throw ReconstructException();
+        std::cerr << "Exception caught: " << e.what() << std::endl;
         
         return EXIT_FAILURE;
     }

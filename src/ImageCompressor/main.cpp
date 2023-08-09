@@ -13,12 +13,8 @@
 
 int main(int argc , char* argv[])
 {
-    std::string input_dirPath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\test";
-    // std::string CompressOutputFilePath = "..//data//compress_result";
-    // std::string reconstruct_dirPath = "..//data//compress_result//9-3";
+    std::string input_dirPath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\test\\4K";
 
-    int width = 8320; // require value
-    int height = 40000; // required value
     int encode_quality = 95; // default value : true
     bool use_optimizedHuffman = true; // default value : true
     
@@ -35,7 +31,7 @@ int main(int argc , char* argv[])
 
     /* Init compressor properties */ 
     NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
-    compressor->init(width , height , encode_quality , use_optimizedHuffman);
+    compressor->init(encode_quality , use_optimizedHuffman);
 
     /* Compress Samples */
     std::vector<std::vector<unsigned char>> obuffer_lists = compressor->compress(image_matlist);
