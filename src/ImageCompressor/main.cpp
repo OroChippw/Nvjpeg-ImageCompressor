@@ -17,7 +17,30 @@ int main(int argc , char* argv[])
 
     int encode_quality = 95; // default value : true
     bool use_optimizedHuffman = true; // default value : true
+    /* Init compressor properties */ 
+    NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
+    compressor->init(encode_quality , use_optimizedHuffman);
     
+    /* ************************** */
+    /* Single image Samples */
+    /* ************************** */
+    std::string input_imagePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\test\\4K\\8-3.png";
+    cv::Mat image = cv::imread(input_imagePath , cv::IMREAD_COLOR);
+
+    /* Compress Samples */
+    std::vector<unsigned char> obuffer = compressor->compress(image);
+
+    /* Reconstruct Samples */
+    cv::Mat result = compressor->reconstruct(obuffer);
+
+    std::string savePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result\\singleTest.png";
+    cv::imwrite(savePath , result);
+
+
+    /* ************************** */
+    /* ** Batch image Samples *** */
+    /* ************************** */
+
     std::vector<cv::Mat> image_matlist;
     std::vector<cv::String> image_filelist;
     cv::glob(input_dirPath , image_filelist);
@@ -29,9 +52,7 @@ int main(int argc , char* argv[])
     }
     std::cout << "Image list size : " << image_matlist.size() << std::endl;
 
-    /* Init compressor properties */ 
-    NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
-    compressor->init(encode_quality , use_optimizedHuffman);
+
 
     /* Compress Samples */
     std::vector<std::vector<unsigned char>> obuffer_lists = compressor->compress(image_matlist);
@@ -48,5 +69,6 @@ int main(int argc , char* argv[])
         cv::imwrite(savePath , reconstructImageList[index]);
     }
 
+    
     return EXIT_SUCCESS;
 }

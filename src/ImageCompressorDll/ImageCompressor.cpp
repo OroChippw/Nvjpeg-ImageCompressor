@@ -45,6 +45,13 @@ std::vector<std::vector<unsigned char>> NvjpegCompressRunner::compress(std::vect
     return compressor->getObufferList();
 }
 
+std::vector<unsigned char> NvjpegCompressRunner::compress(cv::Mat image)
+{
+    auto obuffer = compressor->Compress(image);
+    return obuffer;
+}
+
+
 std::vector<cv::Mat> NvjpegCompressRunner::reconstruct(std::vector<std::vector<unsigned char>> obuffer_lists)
 {
     auto startTime = std::chrono::steady_clock::now();
@@ -58,4 +65,10 @@ std::vector<cv::Mat> NvjpegCompressRunner::reconstruct(std::vector<std::vector<u
     std::cout << "NvjpegCompressRunner Reconstruct Func Cost Time : " << elapsedTime << " ms" << std::endl;
 
     return compressor->getResultList();
+}
+
+cv::Mat NvjpegCompressRunner::reconstruct(std::vector<unsigned char> obuffer)
+{
+    cv::Mat image = compressor->Reconstructed(obuffer);
+    return image;
 }

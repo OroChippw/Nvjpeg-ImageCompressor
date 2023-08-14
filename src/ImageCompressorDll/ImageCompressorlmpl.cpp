@@ -257,6 +257,21 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(const cv::Ma
     return obuffer;
 }
 
+std::vector<unsigned char> NvjpegCompressRunnerImpl::Compress(cv::Mat image)
+{
+    std::vector<unsigned char>obuffer;
+    try
+    {
+        obuffer = CompressWorker(image); 
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << "Exception caught: " << e.what() << std::endl;
+    }
+
+    return obuffer;
+}
+
 int NvjpegCompressRunnerImpl::Compress(std::vector<cv::Mat> image_list)
 {
     std::cout << "# ----------------------------------------------- #" << std::endl;
@@ -317,36 +332,25 @@ int NvjpegCompressRunnerImpl::CompressImage(std::vector<cv::Mat> image_matlist)
 /* Reconstruct Function */
 
 cv::Mat NvjpegCompressRunnerImpl::ReconstructWorker(const std::vector<unsigned char> obuffer)
-{
-    // unsigned int after_crop_width = compress_image_width / crop_ratio;
-    // unsigned int after_crop_height = compress_image_height / crop_ratio;
-
-    // std::sort(bin_files.begin(), bin_files.end(), cmp);
-    // std::vector<cv::Mat> image_list;
-    // for (int i = 0; i < bin_files.size(); i++)
-    // {
-    //     image_list.emplace_back(Binaryfile2Mat(bin_files[i]));
-    // }
-
-    // int sum_num = crop_ratio * crop_ratio;
-    // int index = 0, index_x = 0, index_y = 0;
-    // cv::Mat resultImage = cv::Mat::zeros(compress_image_height, compress_image_width, image_list[0].type());
-
-    // for (int i = 1; i <= crop_ratio; i++)
-    // {
-    //     for (int j = 1; j <= crop_ratio; j++)
-    //     {
-    //         image_list[index].copyTo(resultImage(cv::Rect(index_x, index_y, image_list[index].cols, image_list[index].rows)));
-    //         index_y += (after_crop_height);
-    //         index += 1;
-    //     }
-    //     index_x += (after_crop_width);
-    //     index_y = 0;
-    // }
-    
+{    
     cv::Mat resultImage = cv::imdecode(obuffer , cv::IMREAD_ANYCOLOR);
 
     return resultImage;
+}
+
+cv::Mat NvjpegCompressRunnerImpl::Reconstructed(std::vector<unsigned char> obuffer)
+{
+    cv::Mat image;
+    try
+    {
+        image = ReconstructWorker(obuffer);
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << "Exception caught: " << e.what() << std::endl;
+    }
+    
+    return image;
 }
 
 int NvjpegCompressRunnerImpl::Reconstructed(std::vector<std::vector<unsigned char>> obuffer_lists)
