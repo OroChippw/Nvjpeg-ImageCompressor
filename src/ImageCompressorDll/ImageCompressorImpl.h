@@ -76,7 +76,10 @@ public:
     ~NvjpegCompressRunnerImpl() {};
 
 public:
+    std::vector<unsigned char> Compress(cv::Mat image);
     int CompressImage(std::vector<cv::Mat> image_matlist);
+
+    cv::Mat Reconstructed(std::vector<unsigned char> obuffer);
     int ReconstructedImage(std::vector<std::vector<unsigned char>> obuffer_lists);
 
 public:

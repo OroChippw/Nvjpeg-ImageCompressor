@@ -29,7 +29,11 @@ public:
     NvjpegCompressRunner();
     ~NvjpegCompressRunner();
     void init(int quality , bool optimize);
+
+    std::vector<unsigned char> compress(cv::Mat image);
     std::vector<std::vector<unsigned char>> compress(std::vector<cv::Mat> image_matlist);
+
+    cv::Mat reconstruct(std::vector<unsigned char> obuffer);
     std::vector<cv::Mat> reconstruct(std::vector<std::vector<unsigned char>> obuffer_lists);
 };
 
