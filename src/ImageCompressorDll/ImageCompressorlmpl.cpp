@@ -182,7 +182,7 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(const cv::Ma
     const unsigned int channel_size = image_width * image_height;
     std::cout << "[COMPRESS IMAGE INFO] width : " << image_width << " height : " << image_height << std::endl;
 
-    /* nvjpeg init */
+    /* nvjpeg handles init */
     nvjpegHandle_t nvjpeg_handle;
     nvjpegEncoderState_t encoder_state; // 存储用于压缩中间缓冲区和变量的结构体
     nvjpegEncoderParams_t encoder_params; // 存储用于JPEG压缩参数的结构体
@@ -193,10 +193,10 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(const cv::Ma
     nvjpegBackend_t backend = NVJPEG_BACKEND_DEFAULT;
 
     cudaEvent_t ev_start = NULL, ev_end = NULL;
-
     CHECK_CUDA(cudaEventCreate(&ev_start));
     CHECK_CUDA(cudaEventCreate(&ev_end));
 
+    // nvjpegCreate函数已被弃用。 使用 nvjpegCreateSimple() 或 nvjpegCreateEx() 函数创建库句柄。
     CHECK_NVJPEG(nvjpegCreate(backend, nullptr, &nvjpeg_handle));
     CHECK_NVJPEG(nvjpegEncoderParamsCreate(nvjpeg_handle, &encoder_params, NULL)); // 创建保存压缩参数的结构
     CHECK_NVJPEG(nvjpegEncoderStateCreate(nvjpeg_handle, &encoder_state, NULL)); // 创建存储压缩中使用的中间缓冲区的编码器状态
@@ -247,9 +247,10 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(const cv::Ma
 
     float ms = 0.0;
     cudaEventElapsedTime(&ms, ev_start, ev_end);
-    std::cout << "=> Cost time : " << ms << "ms" << std::endl;
-    time_total += ms;
-
+    std::cout << "=> Compress Cost time : " << ms << "ms" << std::endl;
+    compress_time_total += ms;
+    
+    /* nvjpeg handles destory */
     nvjpegEncoderParamsDestroy(encoder_params);
     nvjpegEncoderStateDestroy(encoder_state);
     nvjpegDestroy(nvjpeg_handle);
@@ -275,7 +276,7 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::Compress(cv::Mat image)
 int NvjpegCompressRunnerImpl::Compress(std::vector<cv::Mat> image_list)
 {
     std::cout << "# ----------------------------------------------- #" << std::endl;
-    time_total = 0.0;     
+    compress_time_total = 0.0;     
     try
     {
         for (unsigned int index = 0; index < image_list.size(); index++)
@@ -291,7 +292,7 @@ int NvjpegCompressRunnerImpl::Compress(std::vector<cv::Mat> image_list)
     }
 
     std::cout << "# ----------------------------------------------- #" << std::endl;
-    std::cout << image_list.size() << " Images mean Cost time : " << time_total / image_list.size() << "ms" << std::endl;
+    std::cout << image_list.size() << " Images mean Cost time : " << compress_time_total / image_list.size() << "ms" << std::endl;
     
     return EXIT_SUCCESS;
 }
@@ -382,6 +383,113 @@ int NvjpegCompressRunnerImpl::ReconstructedImage(std::vector<std::vector<unsigne
     
     return EXIT_SUCCESS;
 }
+
+/* Decode Function */
+
+int NvjpegCompressRunnerImpl::dev_malloc(void **p, size_t s) { return (int)cudaMalloc(p, s); }
+
+int NvjpegCompressRunnerImpl::dev_free(void *p) { return (int)cudaFree(p); }
+
+int NvjpegCompressRunnerImpl::host_malloc(void** p, size_t s, unsigned int f) { return (int)cudaHostAlloc(p, s, f); }
+
+int NvjpegCompressRunnerImpl::host_free(void* p) { return (int)cudaFreeHost(p); }
+
+cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> obuffer)
+{
+    /* 为RGBi输出格式准备缓冲区，NVJPEG_MAX_COMPONENT为nvjpeg解码器支持的最大通道数，默认为4 */
+    int widths[NVJPEG_MAX_COMPONENT];
+    int heights[NVJPEG_MAX_COMPONENT];
+    int channels;
+    bool hw_decode_available;
+
+    /* nvjpeg handles init */
+    nvjpegHandle_t nvjpeg_handle;
+    nvjpegJpegState_t nvjpeg_state;
+    nvjpegOutputFormat_t fmt = NVJPEG_OUTPUT_RGB;
+
+    nvjpegJpegState_t nvjpeg_decoupled_state;
+    nvjpegDecodeParams_t nvjpeg_decode_params;
+    nvjpegJpegDecoder_t nvjpeg_decoder;
+    nvjpegBufferPinned_t pinned_buffers[2]; // 2 buffers for pipelining
+    nvjpegBufferDevice_t device_buffer;
+    nvjpegJpegStream_t  jpeg_streams[2]; //  2 streams for pipelining
+    /* nvjpegBackend_t用来选择运行后端，使用GPU解码baseline JPEG或者使用CPU进行Huffman解码 */
+    nvjpegBackend_t backend = NVJPEG_BACKEND_DEFAULT;
+
+    cudaEvent_t ev_start = NULL, ev_end = NULL;
+    CHECK_CUDA(cudaEventCreate(&ev_start));
+    CHECK_CUDA(cudaEventCreate(&ev_end));
+
+    nvjpegStatus_t status = nvjpegCreateEx(NVJPEG_BACKEND_HARDWARE, nullptr , nullptr , NVJPEG_FLAGS_DEFAULT , &nvjpeg_handle);
+    hw_decode_available = true;
+    if( status == NVJPEG_STATUS_ARCH_MISMATCH) 
+    {
+        std::cout << "Hardware Decoder not supported. Falling back to default backend" << std::endl;
+        CHECK_NVJPEG(nvjpegCreateEx(backend, nullptr, nullptr, NVJPEG_FLAGS_DEFAULT, &nvjpeg_handle));
+        hw_decode_available = false;
+    }else
+    {
+        CHECK_NVJPEG(status);
+    }
+    CHECK_NVJPEG(nvjpegJpegStateCreate(nvjpeg_handle, &nvjpeg_state));
+    /* Create decoupled api handles */
+    CHECK_NVJPEG(nvjpegDecoderCreate(nvjpeg_handle, NVJPEG_BACKEND_DEFAULT, &nvjpeg_decoder));
+    CHECK_NVJPEG(nvjpegDecoderStateCreate(nvjpeg_handle, nvjpeg_decoder, &nvjpeg_decoupled_state));   
+
+    CHECK_NVJPEG(nvjpegBufferPinnedCreate(nvjpeg_handle, NULL, &pinned_buffers[0]));
+    CHECK_NVJPEG(nvjpegBufferPinnedCreate(nvjpeg_handle, NULL, &pinned_buffers[1]));
+    CHECK_NVJPEG(nvjpegBufferDeviceCreate(nvjpeg_handle, NULL, &device_buffer));
+    
+    CHECK_NVJPEG(nvjpegJpegStreamCreate(nvjpeg_handle, &jpeg_streams[0]));
+    CHECK_NVJPEG(nvjpegJpegStreamCreate(nvjpeg_handle, &jpeg_streams[1]));
+    CHECK_NVJPEG(nvjpegDecodeParamsCreate(nvjpeg_handle, &nvjpeg_decode_params));
+
+    std::vector<const unsigned char*> batched_bitstreams;
+    std::vector<size_t> batched_bitstreams_size;
+    std::vector<nvjpegImage_t>  batched_output;
+
+    if(hw_decode_available)
+    {
+        // extract bitstream meta data to figure out whether a bit-stream can be decoded
+        nvjpegJpegStreamParseHeader(nvjpeg_handle, (const unsigned char *)obuffer.data(), img_len , jpeg_streams[0]);
+        int isSupported = -1;
+        nvjpegDecodeBatchedSupported(nvjpeg_handle, jpeg_streams[0], &isSupported);
+    }else
+    {
+
+    }
+    
+    CHECK_CUDA(cudaEventRecord(ev_start));
+
+
+    /* ================================= */
+
+    float ms = 0.0;
+    CHECK_CUDA(cudaEventSynchronize(ev_end));
+    CHECK_CUDA(cudaEventElapsedTime(&ms, ev_start, ev_end)); 
+    std::cout << "=> Decode Cost time : " << ms << "ms" << std::endl;
+    decode_time_total += ms;
+
+    /* nvjpeg handles destory */
+    CHECK_NVJPEG(nvjpegDecodeParamsDestroy(nvjpeg_decode_params));
+    CHECK_NVJPEG(nvjpegJpegStreamDestroy(jpeg_streams[0]));
+    CHECK_NVJPEG(nvjpegJpegStreamDestroy(jpeg_streams[1]));
+    CHECK_NVJPEG(nvjpegBufferPinnedDestroy(pinned_buffers[0]));
+    CHECK_NVJPEG(nvjpegBufferPinnedDestroy(pinned_buffers[1]));
+    CHECK_NVJPEG(nvjpegBufferDeviceDestroy(device_buffer));
+    CHECK_NVJPEG(nvjpegJpegStateDestroy(nvjpeg_decoupled_state));  
+    CHECK_NVJPEG(nvjpegDecoderDestroy(nvjpeg_decoder));
+    
+    cv::Mat mat;
+    
+    return mat;
+}
+
+int NvjpegCompressRunnerImpl::Decode(std::vector<std::vector<unsigned char>> obuffer_lists)
+{
+    return EXIT_SUCCESS;
+}
+
 
 /* Calculate indicator function */
 

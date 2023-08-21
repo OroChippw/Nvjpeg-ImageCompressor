@@ -11,6 +11,7 @@ of NvjpegCompressRunnerImpl each module
 #include <iostream>
 #include <opencv2/core.hpp>
 #include <nvjpeg.h>
+#include <cuda_runtime_api.h>
 
 #include "dirent.h"
 
@@ -34,12 +35,6 @@ of NvjpegCompressRunnerImpl each module
     }                                                                       \
 }
 
-class ReconstructException : public std::exception {
-    public:
-        const char* what() const noexcept override {
-            return "ReconstructException";
-        }
-};
 
 class NvjpegCompressRunnerImpl
 {
@@ -64,7 +59,8 @@ private:
     int compress_image_height = 40000;
 
     /* Verifier */
-    double time_total = 0.0;
+    double compress_time_total = 0.0;
+    double decode_time_total = 0.0;
     double psnr_val_score; 
 
     /* Compress Buffer List */
@@ -107,9 +103,17 @@ private:
     cv::Mat CalculateDiffmap(const cv::Mat srcImage , const std::string compImagePath);
     
     /* Components that perform refactoring */
+    /* ******* Use opencv imdecode to decode directly ******* */
     int Reconstructed(std::vector<std::vector<unsigned char>> obuffer_lists);
     cv::Mat ReconstructWorker(const std::vector<unsigned char> obuffer);
-    
+    /* ******* Use NvjpegDecoder to decode ******* */
+    int dev_malloc(void **p, size_t s);
+    int dev_free(void *p);
+    int host_malloc(void** p, size_t s, unsigned int f);
+    int host_free(void* p);
+    int Decode(std::vector<std::vector<unsigned char>> obuffer_lists);
+    cv::Mat DecodeWorker(const std::vector<unsigned char> obuffer);
+
     /* Other */
     bool cmp(const std::string& str1, const std::string& str2);
     cv::Mat addImage(cv::Mat image_1 , cv::Mat image_2);

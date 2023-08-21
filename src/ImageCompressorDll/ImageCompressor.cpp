@@ -51,6 +51,11 @@ std::vector<unsigned char> NvjpegCompressRunner::compress(cv::Mat image)
     return obuffer;
 }
 
+cv::Mat NvjpegCompressRunner::reconstruct(std::vector<unsigned char> obuffer)
+{
+    cv::Mat image = compressor->Reconstructed(obuffer);
+    return image;
+}
 
 std::vector<cv::Mat> NvjpegCompressRunner::reconstruct(std::vector<std::vector<unsigned char>> obuffer_lists)
 {
@@ -67,8 +72,13 @@ std::vector<cv::Mat> NvjpegCompressRunner::reconstruct(std::vector<std::vector<u
     return compressor->getResultList();
 }
 
-cv::Mat NvjpegCompressRunner::reconstruct(std::vector<unsigned char> obuffer)
+
+cv::Mat NvjpegCompressRunner::decode(std::vector<unsigned char> obuffer)
 {
-    cv::Mat image = compressor->Reconstructed(obuffer);
-    return image;
+
+}
+
+std::vector<cv::Mat> NvjpegCompressRunner::decode(std::vector<std::vector<unsigned char>> obuffer_lists)
+{
+
 }
