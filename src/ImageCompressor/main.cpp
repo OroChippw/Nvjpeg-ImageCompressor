@@ -31,44 +31,46 @@ int main(int argc , char* argv[])
     std::vector<unsigned char> obuffer = compressor->compress(image);
 
     /* Reconstruct Samples */
-    cv::Mat result = compressor->reconstruct(obuffer);
+    cv::Mat reconstructResult = compressor->reconstruct(obuffer);
 
-    std::string savePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result\\singleTest.png";
-    cv::imwrite(savePath , result);
+    std::string reconstructSavePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result\\reconstruct.png";
+    cv::imwrite(reconstructSavePath , reconstructResult);
 
+    /* Decode Samples */
+    cv::Mat decodeResult = compressor->decode(obuffer);
+    std::string decodeSavePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result\\decode.png";
+    cv::imwrite(decodeSavePath , decodeResult);
 
     /* ************************** */
     /* ** Batch image Samples *** */
     /* ************************** */
 
-    std::vector<cv::Mat> image_matlist;
-    std::vector<cv::String> image_filelist;
-    cv::glob(input_dirPath , image_filelist);
+    // std::vector<cv::Mat> image_matlist;
+    // std::vector<cv::String> image_filelist;
+    // cv::glob(input_dirPath , image_filelist);
 
-    for (const auto& file : image_filelist)
-    {
-        std::cout << "File : " << file << std::endl;
-        image_matlist.emplace_back(cv::imread(file , cv::IMREAD_COLOR));
-    }
-    std::cout << "Image list size : " << image_matlist.size() << std::endl;
+    // for (const auto& file : image_filelist)
+    // {
+    //     std::cout << "File : " << file << std::endl;
+    //     image_matlist.emplace_back(cv::imread(file , cv::IMREAD_COLOR));
+    // }
+    // std::cout << "Image list size : " << image_matlist.size() << std::endl;
 
 
+    // /* Compress Samples */
+    // std::vector<std::vector<unsigned char>> obuffer_lists = compressor->compress(image_matlist);
+    // std::cout << "Compress buffer list size : " << obuffer_lists.size() << std::endl;
 
-    /* Compress Samples */
-    std::vector<std::vector<unsigned char>> obuffer_lists = compressor->compress(image_matlist);
-    std::cout << "Compress buffer list size : " << obuffer_lists.size() << std::endl;
+    // /* Reconstruct Samples */
+    // std::vector<cv::Mat> reconstructImageList = compressor->reconstruct(obuffer_lists);
+    // std::cout << "Reconstruct image list size : " << reconstructImageList.size() << std::endl;
 
-    /* Reconstruct Samples */
-    std::vector<cv::Mat> reconstructImageList = compressor->reconstruct(obuffer_lists);
-    std::cout << "Reconstruct image list size : " << reconstructImageList.size() << std::endl;
+    // std::string ReconstructedFilePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result";
+    // for (unsigned int index = 0 ; index < reconstructImageList.size() ; index++)
+    // {
+    //     std::string savePath = ReconstructedFilePath + "//" + std::to_string(index) + ".png";
+    //     cv::imwrite(savePath , reconstructImageList[index]);
+    // }
 
-    std::string ReconstructedFilePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result";
-    for (unsigned int index = 0 ; index < reconstructImageList.size() ; index++)
-    {
-        std::string savePath = ReconstructedFilePath + "//" + std::to_string(index) + ".png";
-        cv::imwrite(savePath , reconstructImageList[index]);
-    }
-
-    
     return EXIT_SUCCESS;
 }

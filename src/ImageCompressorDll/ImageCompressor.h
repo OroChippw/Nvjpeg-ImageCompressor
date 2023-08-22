@@ -35,6 +35,7 @@ public:
 
     cv::Mat reconstruct(std::vector<unsigned char> obuffer);
     std::vector<cv::Mat> reconstruct(std::vector<std::vector<unsigned char>> obuffer_lists);
+    
     cv::Mat decode(std::vector<unsigned char> obuffer);
     std::vector<cv::Mat> decode(std::vector<std::vector<unsigned char>> obuffer_lists);
 };

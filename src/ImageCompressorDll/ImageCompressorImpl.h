@@ -13,8 +13,6 @@ of NvjpegCompressRunnerImpl each module
 #include <nvjpeg.h>
 #include <cuda_runtime_api.h>
 
-#include "dirent.h"
-
 #define CHECK_CUDA(call)                                                    \
 {                                                                           \
     cudaError_t _e = (call);                                                \
@@ -78,6 +76,9 @@ public:
     cv::Mat Reconstructed(std::vector<unsigned char> obuffer);
     int ReconstructedImage(std::vector<std::vector<unsigned char>> obuffer_lists);
 
+    cv::Mat Decode(std::vector<unsigned char> obuffer);
+    int DecodeImage(std::vector<std::vector<unsigned char>> obuffer_lists);
+
 public:
     void setImageProperties(int width , int height);
     void setEncodeQuality(int quality);
@@ -88,8 +89,7 @@ public:
     std::vector<cv::Mat> getResultList();
 
 private:
-    /* Read file list and image pre-processing */
-    int ReadInput(const std::string input_path);
+    /* Image pre-processing */
     std::vector<cv::Mat> CropImage(const cv::Mat Image , int crop_ratio);
     int CalculateGreatestFactor(int m , int n);
 
