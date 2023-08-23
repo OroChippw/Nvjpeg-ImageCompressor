@@ -91,7 +91,7 @@ cv::Mat NvjpegCompressRunner::decode(std::vector<unsigned char> obuffer)
     auto endTime = std::chrono::steady_clock::now();
 
     std::string run_state = image.empty() ? "Failure" : "Finish";
-    std::cout << "[INFO] Reconstruct Result : " << run_state << std::endl;
+    std::cout << "[INFO] Decode Result : " << run_state << std::endl;
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     std::cout << "[INFO] NvjpegCompressRunner Decode Func Cost Time : " << elapsedTime << " ms" << std::endl;
 
