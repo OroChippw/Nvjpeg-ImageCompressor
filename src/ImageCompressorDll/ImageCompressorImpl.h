@@ -107,10 +107,10 @@ private:
     int Reconstructed(std::vector<std::vector<unsigned char>> obuffer_lists);
     cv::Mat ReconstructWorker(const std::vector<unsigned char> obuffer);
     /* ******* Use NvjpegDecoder to decode ******* */
-    int dev_malloc(void **p, size_t s);
-    int dev_free(void *p);
-    int host_malloc(void** p, size_t s, unsigned int f);
-    int host_free(void* p);
+    // int dev_malloc(void **p, size_t s);
+    // int dev_free(void *p);
+    // int host_malloc(void** p, size_t s, unsigned int f);
+    // int host_free(void* p);
     int Decode(std::vector<std::vector<unsigned char>> obuffer_lists);
     cv::Mat DecodeWorker(const std::vector<unsigned char> obuffer);
 
@@ -118,4 +118,5 @@ private:
     bool cmp(const std::string& str1, const std::string& str2);
     cv::Mat addImage(cv::Mat image_1 , cv::Mat image_2);
     cv::Mat Binaryfile2Mat(std::string ImagePath);
+    std::string nvjpegStatusToString(nvjpegStatus_t status);
 };
