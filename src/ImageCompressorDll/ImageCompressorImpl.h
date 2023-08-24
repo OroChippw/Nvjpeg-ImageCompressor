@@ -122,7 +122,7 @@ private:
     bool cmp(const std::string& str1, const std::string& str2);
     cv::Mat addImage(cv::Mat image_1 , cv::Mat image_2);
     cv::Mat Binaryfile2Mat(std::string ImagePath);
-    std::string nvjpegStatusToString(nvjpegStatus_t status);
+    // std::string nvjpegStatusToString(nvjpegStatus_t status);
     
     int writeBMP(const char *filename, const unsigned char *d_chanR, int pitchR,
                 const unsigned char *d_chanG, int pitchG,
@@ -131,9 +131,9 @@ private:
     int writeBMPi(const char *filename, const unsigned char *d_RGB, int pitch,
                 int width, int height);
     
-    cv::Mat getCVImage(const unsigned char *d_chanR, int pitchR, \
+    cv::Mat getCVImage(const unsigned char *d_chanB, int pitchB, \
                 const unsigned char *d_chanG, int pitchG, \
-                const unsigned char *d_chanB, int pitchB, \
+                const unsigned char *d_chanR, int pitchR, \
                 int width, int height);
 
 };

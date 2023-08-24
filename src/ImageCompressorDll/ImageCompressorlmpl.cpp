@@ -161,7 +161,7 @@ std::vector<unsigned char> NvjpegCompressRunnerImpl::CompressWorker(const cv::Ma
     */
     nvjpegEncoderParamsSetOptimizedHuffman(encoder_params, use_optimizedHuffman, NULL);
     nvjpegEncoderParamsSetQuality(encoder_params, encode_quality, NULL); // 设置质量参数
-    nvjpegEncoderParamsSetSamplingFactors(encoder_params, nvjpegChromaSubsampling_t::NVJPEG_CSS_422, NULL); // 设置用于JPEG压缩的色度子采样参数，官方默认为NVJPEG_CSS_444
+    nvjpegEncoderParamsSetSamplingFactors(encoder_params, nvjpegChromaSubsampling_t::NVJPEG_CSS_444, NULL); // 设置用于JPEG压缩的色度子采样参数，官方默认为NVJPEG_CSS_444
 
     nvjpegImage_t input; // 输入图像数据指针为显式指针，每个颜色分量分别存储
 
@@ -501,7 +501,6 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
             CHECK_NVJPEG(nvjpegDecodeJpegDevice(nvjpeg_handle, nvjpeg_decoder, nvjpeg_decoupled_state, \
                             &otherdecode_output[i], NULL));
         }
-
     }
 
     CHECK_CUDA(cudaEventRecord(ev_end));
@@ -545,9 +544,12 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
     for (int i = 0; i < batch_size; i++) {
         if (nvjpeg_image.channel[0] != nullptr)
         {
-            cv::Mat decodedImage = getCVImage(nvjpeg_image.channel[0], nvjpeg_image.pitch[0],
-                                    nvjpeg_image.channel[1], nvjpeg_image.pitch[1], nvjpeg_image.channel[2],
-                                    nvjpeg_image.pitch[2], widths[i], heights[i]);
+            /*
+                nvjpeg_image.channel数组的通道顺序与OpenCV相反，它采用的是RG（红绿蓝）的顺序
+            */
+            cv::Mat decodedImage = getCVImage(nvjpeg_image.channel[0], nvjpeg_image.pitch[0], \
+                                            nvjpeg_image.channel[1], nvjpeg_image.pitch[1], \
+                                            nvjpeg_image.channel[2], nvjpeg_image.pitch[2], widths[i], heights[i]);
             if (decodedImage.empty())
             {
                 std::cout << "[ERROR] DecodedImage is empty" << std::endl;
@@ -721,34 +723,34 @@ cv::Mat NvjpegCompressRunnerImpl::addImage(cv::Mat image_1, cv::Mat image_2)
 
 /* Debug */
 
-std::string NvjpegCompressRunnerImpl::nvjpegStatusToString(nvjpegStatus_t status) {
-    switch (status) {
-        case NVJPEG_STATUS_SUCCESS:
-            return "NVJPEG_STATUS_SUCCESS";
-        case NVJPEG_STATUS_NOT_INITIALIZED:
-            return "NVJPEG_STATUS_NOT_INITIALIZED";
-        case NVJPEG_STATUS_INVALID_PARAMETER:
-            return "NVJPEG_STATUS_INVALID_PARAMETER";
-        case NVJPEG_STATUS_BAD_JPEG:
-            return "NVJPEG_STATUS_BAD_JPEG";
-        case NVJPEG_STATUS_JPEG_NOT_SUPPORTED:
-            return "NVJPEG_STATUS_JPEG_NOT_SUPPORTED";
-        case NVJPEG_STATUS_ALLOCATOR_FAILURE:
-            return "NVJPEG_STATUS_ALLOCATOR_FAILURE";
-        case NVJPEG_STATUS_EXECUTION_FAILED:
-            return "NVJPEG_STATUS_EXECUTION_FAILED";
-        case NVJPEG_STATUS_ARCH_MISMATCH:
-            return "NVJPEG_STATUS_ARCH_MISMATCH";
-        case NVJPEG_STATUS_INTERNAL_ERROR:
-            return "NVJPEG_STATUS_INTERNAL_ERROR";
-        case NVJPEG_STATUS_IMPLEMENTATION_NOT_SUPPORTED:
-            return "NVJPEG_STATUS_IMPLEMENTATION_NOT_SUPPORTED";
-        case NVJPEG_STATUS_INCOMPLETE_BITSTREAM:
-            return "NVJPEG_STATUS_INCOMPLETE_BITSTREAM";
-        default:
-            return "Unknown error";
-    }
-}
+// std::string NvjpegCompressRunnerImpl::nvjpegStatusToString(nvjpegStatus_t status) {
+//     switch (status) {
+//         case NVJPEG_STATUS_SUCCESS:
+//             return "NVJPEG_STATUS_SUCCESS";
+//         case NVJPEG_STATUS_NOT_INITIALIZED:
+//             return "NVJPEG_STATUS_NOT_INITIALIZED";
+//         case NVJPEG_STATUS_INVALID_PARAMETER:
+//             return "NVJPEG_STATUS_INVALID_PARAMETER";
+//         case NVJPEG_STATUS_BAD_JPEG:
+//             return "NVJPEG_STATUS_BAD_JPEG";
+//         case NVJPEG_STATUS_JPEG_NOT_SUPPORTED:
+//             return "NVJPEG_STATUS_JPEG_NOT_SUPPORTED";
+//         case NVJPEG_STATUS_ALLOCATOR_FAILURE:
+//             return "NVJPEG_STATUS_ALLOCATOR_FAILURE";
+//         case NVJPEG_STATUS_EXECUTION_FAILED:
+//             return "NVJPEG_STATUS_EXECUTION_FAILED";
+//         case NVJPEG_STATUS_ARCH_MISMATCH:
+//             return "NVJPEG_STATUS_ARCH_MISMATCH";
+//         case NVJPEG_STATUS_INTERNAL_ERROR:
+//             return "NVJPEG_STATUS_INTERNAL_ERROR";
+//         case NVJPEG_STATUS_IMPLEMENTATION_NOT_SUPPORTED:
+//             return "NVJPEG_STATUS_IMPLEMENTATION_NOT_SUPPORTED";
+//         case NVJPEG_STATUS_INCOMPLETE_BITSTREAM:
+//             return "NVJPEG_STATUS_INCOMPLETE_BITSTREAM";
+//         default:
+//             return "Unknown error";
+//     }
+// }
 
 /* Write Decode */
 
@@ -938,19 +940,19 @@ int NvjpegCompressRunnerImpl::writeBMPi(const char *filename, const unsigned cha
     return 0;
 }
 
-cv::Mat NvjpegCompressRunnerImpl::getCVImage(const unsigned char *d_chanR, int pitchR, \
+cv::Mat NvjpegCompressRunnerImpl::getCVImage(const unsigned char *d_chanB, int pitchB, \
                                              const unsigned char *d_chanG, int pitchG, \
-                                             const unsigned char *d_chanB, int pitchB, \
+                                             const unsigned char *d_chanR, int pitchR, \
                                              int width, int height) 
 {
-    cv::Mat cvImage(height, width, CV_8UC3);
-
+    cv::Mat cvImage(height, width, CV_8UC3); //BGR
     std::vector<unsigned char> vchanR(height * width);
     std::vector<unsigned char> vchanG(height * width);
     std::vector<unsigned char> vchanB(height * width);
     unsigned char *chanR = vchanR.data();
     unsigned char *chanG = vchanG.data();
     unsigned char *chanB = vchanB.data();
+
     CHECK_CUDA(cudaMemcpy2D(chanR, (size_t)width, d_chanR, (size_t)pitchR, \
                     width, height, cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy2D(chanG, (size_t)width, d_chanG, (size_t)pitchR, \
