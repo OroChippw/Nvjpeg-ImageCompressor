@@ -47,9 +47,14 @@ std::vector<std::vector<unsigned char>> NvjpegCompressRunnerImpl::getObufferList
     return obuffer_lists;
 }
 
-std::vector<cv::Mat> NvjpegCompressRunnerImpl::getResultList()
+std::vector<cv::Mat> NvjpegCompressRunnerImpl::getReconstructResultList()
 {
-    return result_lists;
+    return reconstruct_result_lists;
+}
+
+std::vector<cv::Mat> NvjpegCompressRunnerImpl::getDecodeResultList()
+{
+    return decode_result_lists;
 }
 
 /* Preprocess Function */
@@ -295,7 +300,7 @@ cv::Mat NvjpegCompressRunnerImpl::Reconstructed(std::vector<unsigned char> obuff
     }
     catch(const std::exception& e)
     {
-        std::cerr << "Exception caught : " << e.what() << std::endl;
+        std::cerr << "[ERROR] Exception caught : " << e.what() << std::endl;
     }
     
     return image;
@@ -307,12 +312,12 @@ int NvjpegCompressRunnerImpl::Reconstructed(std::vector<std::vector<unsigned cha
     {
         for (unsigned int index = 0; index < obuffer_lists.size(); index++)
         {
-            result_lists.emplace_back(ReconstructWorker(obuffer_lists[index]));
+            reconstruct_result_lists.emplace_back(ReconstructWorker(obuffer_lists[index]));
         }
     }
     catch (const std::exception& e) 
     {
-        std::cerr << "Exception caught: " << e.what() << std::endl;
+        std::cerr << "[ERROR] Exception caught: " << e.what() << std::endl;
         
         return EXIT_FAILURE;
     }
@@ -333,15 +338,15 @@ int NvjpegCompressRunnerImpl::ReconstructedImage(std::vector<std::vector<unsigne
 
 /* Decode Function */
 
-int dev_malloc(void** p, size_t s)
-{
-    return (int)cudaMalloc(p, s);
-}
+// int dev_malloc(void** p, size_t s)
+// {
+//     return (int)cudaMalloc(p, s);
+// }
 
-int dev_free(void* p)
-{
-    return (int)cudaFree(p);
-}
+// int dev_free(void* p)
+// {
+//     return (int)cudaFree(p);
+// }
 
 cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> obuffer)
 {   
@@ -349,19 +354,17 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
     {
         std::cerr << "[ERROR] OBuffer is empty : " << std::endl;
         return cv::Mat();
-    }else{
-        std::cout << "[INFO] OBuffer size : " << obuffer.size() << std::endl;
     }
 
     bool is_interleaved = false;
     bool hw_decode_available = false;
     int batch_size = 1;
+    bool saveBMP = false;
 
     // Image buffers. 
-    unsigned char* pBufferW = NULL;
+    // unsigned char* pBufferW = NULL;
     // device image buffers.
-    size_t pitchDescW;
-    cudaStream_t stream;
+    // cudaStream_t stream;
 
     nvjpegImage_t nvjpeg_image; // output buffers
     nvjpegImage_t nvjpeg_output_size;  // output buffer sizes, for convenience
@@ -380,7 +383,7 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
     nvjpegBufferPinned_t pinned_buffers[2]; // 2 buffers for pipelining
     nvjpegJpegStream_t  jpeg_streams[2]; //  2 streams for pipelining
 
-    nvjpegDevAllocator_t dev_allocator = {&dev_malloc, &dev_free};
+    // nvjpegDevAllocator_t dev_allocator = {&dev_malloc, &dev_free};
     
     /* Retrieve the componenet and size info. */
     int nComponent = 0;
@@ -397,9 +400,9 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
         nvjpeg_output_size.pitch[c] = 0;
     }
 
-    CHECK_CUDA(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+    // CHECK_CUDA(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
 
-    CHECK_NVJPEG(nvjpegCreate(backend , &dev_allocator , &nvjpeg_handle));
+    CHECK_NVJPEG(nvjpegCreate(backend , nullptr , &nvjpeg_handle));
     CHECK_NVJPEG(nvjpegJpegStateCreate(nvjpeg_handle, &nvjpeg_state));
 
     CHECK_NVJPEG(nvjpegDecoderCreate(nvjpeg_handle, backend, &nvjpeg_decoder));
@@ -418,48 +421,20 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
         std::cout << "[INFO] Channel #" << c << " size: " << widths[c] << " x " << heights[c] << std::endl;
     }
 
-    switch (subsampling) {
-      case NVJPEG_CSS_444:
-        std::cout << "[INFO] YUV 4:4:4 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_440:
-        std::cout << "[INFO] YUV 4:4:0 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_422:
-        std::cout << "[INFO] YUV 4:2:2 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_420:
-        std::cout << "[INFO] YUV 4:2:0 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_411:
-        std::cout << "[INFO] YUV 4:1:1 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_410:
-        std::cout << "[INFO] YUV 4:1:0 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_GRAY:
-        std::cout << "[INFO] Grayscale JPEG " << std::endl;
-        break;
-      case NVJPEG_CSS_UNKNOWN:
-        std::cerr << "[ERROR] Unknown chroma subsampling" << std::endl;
-    }
-
     // in the case of interleaved RGB output, write only to single channel, but 3 samples at once
     int mul = 1;
     if (format == NVJPEG_OUTPUT_RGBI || format == NVJPEG_OUTPUT_BGRI)
     {
-        pitchDescW = NVJPEG_MAX_COMPONENT * widths[0];
         nComponent = 1;
         mul = 3;
         is_interleaved = true;
     }else if (format == NVJPEG_OUTPUT_RGB || format == NVJPEG_OUTPUT_BGR) 
     {
-        pitchDescW = 3 * widths[0];
         widths[1] = widths[2] = widths[0];
         heights[1] = heights[2] = heights[0];
         is_interleaved = false;
     }
-    std::cout << "[INFO] isInterleaved : " << is_interleaved << std::endl;
+    // std::cout << "[INFO] isInterleaved : " << is_interleaved << std::endl;
 
     // realloc output buffer if required
     for (int c = 0; c < nComponent; c++) {
@@ -495,7 +470,7 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
         otherdecode_output.push_back(nvjpeg_image);
     }
 
-    CHECK_CUDA(cudaEventRecord(ev_start , stream));
+    CHECK_CUDA(cudaEventRecord(ev_start));
 
     if(batched_bitstreams.size() > 0)
     {
@@ -503,7 +478,7 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
                             batched_bitstreams.size(), 1, format));
 
         CHECK_NVJPEG(nvjpegDecodeBatched(nvjpeg_handle, nvjpeg_state, batched_bitstreams.data(),
-            batched_bitstreams_size.data(), batched_output.data(), stream));
+            batched_bitstreams_size.data(), batched_output.data(), NULL));
     }
     if(otherdecode_bitstreams.size() > 0)
     {
@@ -517,87 +492,74 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
                             pinned_buffers[buffer_index]));
             CHECK_NVJPEG(nvjpegDecodeJpegHost(nvjpeg_handle, nvjpeg_decoder, nvjpeg_decoupled_state, \
                             nvjpeg_decode_params, jpeg_streams[buffer_index]));
-            CHECK_CUDA(cudaStreamSynchronize(stream));
+            // CHECK_CUDA(cudaStreamSynchronize(stream));
             CHECK_NVJPEG(nvjpegDecodeJpegTransferToDevice(nvjpeg_handle, nvjpeg_decoder, \
-                            nvjpeg_decoupled_state , jpeg_streams[buffer_index], stream));
+                            nvjpeg_decoupled_state , jpeg_streams[buffer_index], NULL));
             // switch pinned buffer in pipeline mode to avoid an extra sync
             buffer_index = 1 - buffer_index; 
 
             CHECK_NVJPEG(nvjpegDecodeJpegDevice(nvjpeg_handle, nvjpeg_decoder, nvjpeg_decoupled_state, \
-                            &otherdecode_output[i], stream));
+                            &otherdecode_output[i], NULL));
         }
 
     }
 
-    CHECK_CUDA(cudaEventRecord(ev_end , stream));
+    CHECK_CUDA(cudaEventRecord(ev_end));
 
     float ms = 0.0;
     cudaEventElapsedTime(&ms, ev_start, ev_end);
     std::cout << "=> Decode Cost time : " << ms << "ms" << std::endl;
-    
-
-    /********************************************************/
-    // cudaError_t eCopy = cudaMalloc((void**)&pBufferW, pitchDescW * heights[0]);
-    // if (cudaSuccess != eCopy)
-    // {
-    //     std::cout << "CUDA Runtime Failure: '#" << eCopy << "' at " <<  __FILE__ << ":" << __LINE__ << std::endl;
-    // }
-
-    // nvjpeg_image.channel[0] = pBufferW;
-    // nvjpeg_image.channel[1] = pBufferW + widths[0] * heights[0];
-    // nvjpeg_image.channel[2] = pBufferW + widths[0] * heights[0] * 2;
-    // nvjpeg_image.pitch[0] = (unsigned int)(is_interleaved ? widths[0] * NVJPEG_MAX_COMPONENT : widths[0]);
-    // nvjpeg_image.pitch[1] = (unsigned int)widths[0];
-    // nvjpeg_image.pitch[2] = (unsigned int)widths[0];
-
-    // if (is_interleaved)
-    // {
-    //     nvjpeg_image.channel[3] = pBufferW + widths[0] * heights[0] * 3;
-    //     nvjpeg_image.pitch[3] = (unsigned int)widths[0];
-    // }
-
-    // CHECK_CUDA(cudaEventRecord(ev_start));
-    // nvjpegStatus_t status = nvjpegDecode(nvjpeg_handle , nvjpeg_state , \
-    //                     (const unsigned char *)obuffer.data(), obuffer.size(), format , &nvjpeg_image, NULL);
-
-    // CHECK_CUDA(cudaEventRecord(ev_end));
-    // if (status != NVJPEG_STATUS_SUCCESS)
-    // {
-    //     std::cerr << "[ERROR] Error in nvjpegDecode." << status << std::endl;
-    // }
-    // float ms = 0.0;
-    // cudaEventElapsedTime(&ms, ev_start, ev_end);
-    // std::cout << "=> Decode Cost time : " << ms << "ms" << std::endl;
-
-    // bool success = true;
-    std::cout << "0" << std::endl;
-
-    cv::Mat resultImage;
-    if (nvjpeg_image.channel[0] != nullptr)
+    if (saveBMP)
     {
-        std::cout << "1" << std::endl;
-        cv::Mat decodedImage(heights[0] , widths[0], CV_8UC3 , nvjpeg_image.channel[0]);
-        if (decodedImage.empty())
-        {
-            std::cout << "[ERROR] DecodedImage is empty" << std::endl;
-            // success = false;
+        for (int i = 0; i < batch_size; i++) {
+            std::string filenames = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\test\\4K\\8-3.png";
+            size_t position = filenames.rfind("\\");
+            std::string sFileName = (std::string::npos == position)
+                    ? filenames
+                    : filenames.substr(position + 1, filenames.size());
+            position = sFileName.rfind(".");
+            sFileName = (std::string::npos == position) ? sFileName : sFileName.substr(0, position);
+            
+            std::string output_dir = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result";
+            
+            std::string fname(output_dir + "\\" + sFileName + ".bmp");
+
+            int err;
+            if (format == NVJPEG_OUTPUT_RGB || format == NVJPEG_OUTPUT_BGR) {
+                err = writeBMP(fname.c_str(), nvjpeg_image.channel[0], nvjpeg_image.pitch[0],
+                                nvjpeg_image.channel[1], nvjpeg_image.pitch[1], nvjpeg_image.channel[2],
+                                nvjpeg_image.pitch[2], widths[i], heights[i]);
+            } else if (format == NVJPEG_OUTPUT_RGBI || format == NVJPEG_OUTPUT_BGRI) {
+                // Write BMP from interleaved data
+                err = writeBMPi(fname.c_str(), nvjpeg_image.channel[0], nvjpeg_image.pitch[0],
+                                widths[i], heights[i]);
+            }
+            if (err) {
+                std::cerr << "[ERROR] Cannot write output file: " << fname << std::endl;
+            }
+            std::cout << "Done writing decoded image to file: " << fname << std::endl;
         }
-        resultImage = decodedImage.clone();
-
-    }else
-    {
-        // success = false;
-        // if (status == NVJPEG_STATUS_SUCCESS) {
-        //     std::cerr << "[ERROR] JPEG decode failed: Output image channel is null." << std::endl;
-        // } else {
-        //     std::cerr << "[ERROR] JPEG decode failed , exception caught : " << status << std::endl;
-        // }
-        
     }
-    std::cout << "2" << std::endl;
+    
+    cv::Mat resultImage;
+    for (int i = 0; i < batch_size; i++) {
+        if (nvjpeg_image.channel[0] != nullptr)
+        {
+            cv::Mat decodedImage = getCVImage(nvjpeg_image.channel[0], nvjpeg_image.pitch[0],
+                                    nvjpeg_image.channel[1], nvjpeg_image.pitch[1], nvjpeg_image.channel[2],
+                                    nvjpeg_image.pitch[2], widths[i], heights[i]);
+            if (decodedImage.empty())
+            {
+                std::cout << "[ERROR] DecodedImage is empty" << std::endl;
+                break;
+            }
+            resultImage = decodedImage.clone();
 
-    /********************************************************/
-
+        }else
+        {
+            std::cerr << "[ERROR] JPEG decode failed: Output image channel is null." << std::endl;
+        }
+    }
 
     CHECK_NVJPEG(nvjpegJpegStateDestroy(nvjpeg_decoupled_state));  
     CHECK_NVJPEG(nvjpegDecoderDestroy(nvjpeg_decoder));
@@ -615,13 +577,11 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(const std::vector<unsigned char> 
       if (nvjpeg_image.channel[c]) {CHECK_CUDA(cudaFree(nvjpeg_image.channel[c]))};
     }
 
-    CHECK_CUDA(cudaStreamDestroy(stream));
+    // CHECK_CUDA(cudaStreamDestroy(stream));
 
     CHECK_NVJPEG(nvjpegJpegStateDestroy(nvjpeg_state));
     CHECK_NVJPEG(nvjpegDestroy(nvjpeg_handle));
     
-    std::cout << "3" << std::endl;
-
     return resultImage;
 }
 
@@ -634,14 +594,39 @@ cv::Mat NvjpegCompressRunnerImpl::Decode(std::vector<unsigned char> obuffer)
     }
     catch(const std::exception& e)
     {
-        std::cerr << "Exception caught : " << e.what() << '\n';
+        std::cerr << "[ERROR] Exception caught : " << e.what() << '\n';
     }
     
     return image;
 }
 
+int NvjpegCompressRunnerImpl::Decode(std::vector<std::vector<unsigned char>> obuffer_lists)
+{
+    try
+    {
+        for (unsigned int index = 0; index < obuffer_lists.size(); index++)
+        {
+            decode_result_lists.emplace_back(DecodeWorker(obuffer_lists[index]));
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[ERROR] Exception caught: " << e.what() << std::endl;
+        
+        return EXIT_FAILURE;
+    }
+    
+    return EXIT_SUCCESS;
+}
+
 int NvjpegCompressRunnerImpl::DecodeImage(std::vector<std::vector<unsigned char>> obuffer_lists)
 {
+    std::cout << "=> Start image decode ... " << std::endl;   
+    if (Decode(obuffer_lists))
+    {
+        return EXIT_FAILURE;
+    }
+    
     return EXIT_SUCCESS;
 }
 
@@ -763,4 +748,223 @@ std::string NvjpegCompressRunnerImpl::nvjpegStatusToString(nvjpegStatus_t status
         default:
             return "Unknown error";
     }
+}
+
+/* Write Decode */
+
+int NvjpegCompressRunnerImpl::writeBMP(const char *filename, const unsigned char *d_chanR, int pitchR, \
+                                       const unsigned char *d_chanG, int pitchG , \
+                                       const unsigned char *d_chanB, int pitchB, \
+                                       int width, int height) {
+    /* 以RGB的格式写入BMP文件 */
+    unsigned int headers[13]; // 存储 BMP 文件头信息的数组
+    FILE *outfile;
+    int extrabytes;  // BMP文件中行的字节数需要是4的倍数，extrabytes用来记录补充的字节数
+    int paddedsize; // 调整后的图像数据大小
+    int x , y , n; // 循环计数器 
+    int red, green, blue; // 存储像素值
+
+    // 分别存储RGB通道的图像数据并将GPU上的图像数据拷贝到主机上的缓冲区中
+    std::vector<unsigned char> vchanR(height * width);
+    std::vector<unsigned char> vchanG(height * width);
+    std::vector<unsigned char> vchanB(height * width);
+    unsigned char *chanR = vchanR.data();
+    unsigned char *chanG = vchanG.data();
+    unsigned char *chanB = vchanB.data();
+    CHECK_CUDA(cudaMemcpy2D(chanR, (size_t)width, d_chanR, (size_t)pitchR , \
+                    width, height, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy2D(chanG, (size_t)width, d_chanG, (size_t)pitchR , \
+                    width, height, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy2D(chanB, (size_t)width, d_chanB, (size_t)pitchR, \
+                    width, height, cudaMemcpyDeviceToHost));
+    // 计算需要补充的字节数及调整后的图像数据大小
+    extrabytes = 4 - ((width * 3) % 4);
+    if (extrabytes == 4) extrabytes = 0;
+    paddedsize = ((width * 3) + extrabytes) * height;
+    std::cout << "[INFO] Extrabytes : " << extrabytes << " Paddedsize : " << paddedsize << std::endl;
+
+    // 设置BMP文件头部信息
+    headers[0] = paddedsize + 54;  // bfSize (whole file size)
+    headers[1] = 0;                // bfReserved (both)
+    headers[2] = 54;               // bfOffbits
+    headers[3] = 40;               // biSize
+    headers[4] = width;            // biWidth
+    headers[5] = height;           // biHeight
+    headers[7] = 0;           // biCompression
+    headers[8] = paddedsize;  // biSizeImage
+    headers[9] = 0;           // biXPelsPerMeter
+    headers[10] = 0;          // biYPelsPerMeter
+    headers[11] = 0;          // biClrUsed
+    headers[12] = 0;          // biClrImportant
+
+    if (!(outfile = fopen(filename, "wb"))) {
+        std::cerr << "[ERROR] Cannot open file: " << filename << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    // 写入 BMP 信息头
+    fprintf(outfile, "BM");
+    for (n = 0; n <= 5; n++) {
+        fprintf(outfile, "%c", headers[n] & 0x000000FF);
+        fprintf(outfile, "%c", (headers[n] & 0x0000FF00) >> 8);
+        fprintf(outfile, "%c", (headers[n] & 0x00FF0000) >> 16);
+        fprintf(outfile, "%c", (headers[n] & (unsigned int)0xFF000000) >> 24);
+    }
+    fprintf(outfile, "%c", 1);
+    fprintf(outfile, "%c", 0);
+    fprintf(outfile, "%c", 24);
+    fprintf(outfile, "%c", 0);
+    for (n = 7; n <= 12; n++) {
+        fprintf(outfile, "%c", headers[n] & 0x000000FF);
+        fprintf(outfile, "%c", (headers[n] & 0x0000FF00) >> 8);
+        fprintf(outfile, "%c", (headers[n] & 0x00FF0000) >> 16);
+        fprintf(outfile, "%c", (headers[n] & (unsigned int)0xFF000000) >> 24);
+    }
+
+    // 写入像素数据，BMP图像格式从下到上写入
+    for (y = height - 1; y >= 0; y--) 
+    {
+        for (x = 0; x <= width - 1; x++) 
+        {
+            red = chanR[y * width + x];
+            green = chanG[y * width + x];
+            blue = chanB[y * width + x];
+            // 确保像素值在合法范围内，并以BGR格式写入像素数据
+            if (red > 255) red = 255;
+            if (red < 0) red = 0;
+            if (green > 255) green = 255;
+            if (green < 0) green = 0;
+            if (blue > 255) blue = 255;
+            if (blue < 0) blue = 0;
+            fprintf(outfile, "%c", blue);
+            fprintf(outfile, "%c", green);
+            fprintf(outfile, "%c", red);
+        }
+        if (extrabytes)  // 写入补充字节
+        {
+            for (n = 1; n <= extrabytes; n++) {
+                fprintf(outfile, "%c", 0);
+            }
+        }
+    }
+
+    fclose(outfile);
+    return EXIT_SUCCESS;
+}
+
+int NvjpegCompressRunnerImpl::writeBMPi(const char *filename, const unsigned char *d_RGB, int pitch, \
+                                        int width, int height) 
+{
+    /* 以RGB的格式写入BMP文件，更详细注释见writeBMP */
+    unsigned int headers[13];
+    FILE *outfile;
+    int extrabytes , paddedsize;
+    int x , y , n;
+    int red, green, blue;
+
+    std::vector<unsigned char> vchanRGB(height * width * 3);
+    unsigned char *chanRGB = vchanRGB.data();
+    CHECK_CUDA(cudaMemcpy2D(chanRGB, (size_t)width * 3, d_RGB, (size_t)pitch,
+                                width * 3, height, cudaMemcpyDeviceToHost));
+
+    extrabytes = 4 - ((width * 3) % 4);
+    if (extrabytes == 4) extrabytes = 0;
+    paddedsize = ((width * 3) + extrabytes) * height;
+    std::cout << "[INFO] Extrabytes : " << extrabytes << " Paddedsize : " << paddedsize << std::endl;
+
+    headers[0] = paddedsize + 54;  // bfSize (whole file size)
+    headers[1] = 0;                // bfReserved (both)
+    headers[2] = 54;               // bfOffbits
+    headers[3] = 40;               // biSize
+    headers[4] = width;            // biWidth
+    headers[5] = height;           // biHeight
+    headers[7] = 0;           // biCompression
+    headers[8] = paddedsize;  // biSizeImage
+    headers[9] = 0;           // biXPelsPerMeter
+    headers[10] = 0;          // biYPelsPerMeter
+    headers[11] = 0;          // biClrUsed
+    headers[12] = 0;          // biClrImportant
+
+    if (!(outfile = fopen(filename, "wb"))) {
+        std::cerr << "[ERROR] Cannot open file: " << filename << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    fprintf(outfile, "BM");
+    for (n = 0; n <= 5; n++) {
+        fprintf(outfile, "%c", headers[n] & 0x000000FF);
+        fprintf(outfile, "%c", (headers[n] & 0x0000FF00) >> 8);
+        fprintf(outfile, "%c", (headers[n] & 0x00FF0000) >> 16);
+        fprintf(outfile, "%c", (headers[n] & (unsigned int)0xFF000000) >> 24);
+    }
+    fprintf(outfile, "%c", 1);
+    fprintf(outfile, "%c", 0);
+    fprintf(outfile, "%c", 24);
+    fprintf(outfile, "%c", 0);
+    for (n = 7; n <= 12; n++) {
+        fprintf(outfile, "%c", headers[n] & 0x000000FF);
+        fprintf(outfile, "%c", (headers[n] & 0x0000FF00) >> 8);
+        fprintf(outfile, "%c", (headers[n] & 0x00FF0000) >> 16);
+        fprintf(outfile, "%c", (headers[n] & (unsigned int)0xFF000000) >> 24);
+    }
+
+    
+    for (y = height - 1; y >= 0;y--)
+    {
+        for (x = 0; x <= width - 1; x++) {
+            red = chanRGB[(y * width + x) * 3];
+            green = chanRGB[(y * width + x) * 3 + 1];
+            blue = chanRGB[(y * width + x) * 3 + 2];
+
+            if (red > 255) red = 255;
+            if (red < 0) red = 0;
+            if (green > 255) green = 255;
+            if (green < 0) green = 0;
+            if (blue > 255) blue = 255;
+            if (blue < 0) blue = 0;
+            fprintf(outfile, "%c", blue);
+            fprintf(outfile, "%c", green);
+            fprintf(outfile, "%c", red);
+        }
+        if (extrabytes)
+        {
+            for (n = 1; n <= extrabytes; n++) {
+                fprintf(outfile, "%c", 0);
+            }
+        }
+    }
+
+    fclose(outfile);
+    return 0;
+}
+
+cv::Mat NvjpegCompressRunnerImpl::getCVImage(const unsigned char *d_chanR, int pitchR, \
+                                             const unsigned char *d_chanG, int pitchG, \
+                                             const unsigned char *d_chanB, int pitchB, \
+                                             int width, int height) 
+{
+    cv::Mat cvImage(height, width, CV_8UC3);
+
+    std::vector<unsigned char> vchanR(height * width);
+    std::vector<unsigned char> vchanG(height * width);
+    std::vector<unsigned char> vchanB(height * width);
+    unsigned char *chanR = vchanR.data();
+    unsigned char *chanG = vchanG.data();
+    unsigned char *chanB = vchanB.data();
+    CHECK_CUDA(cudaMemcpy2D(chanR, (size_t)width, d_chanR, (size_t)pitchR, \
+                    width, height, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy2D(chanG, (size_t)width, d_chanG, (size_t)pitchR, \
+                    width, height, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy2D(chanB, (size_t)width, d_chanB, (size_t)pitchR, \
+                    width, height, cudaMemcpyDeviceToHost));
+
+    for (int y = 0; y < height; y++) 
+    {
+        for (int x = 0; x < width; x++) 
+        {
+            cvImage.at<cv::Vec3b>(y, x) = cv::Vec3b(chanB[y * width + x], chanG[y * width + x], chanR[y * width + x]);
+        }
+    }
+
+    return cvImage;
 }

@@ -63,7 +63,9 @@ private:
 
     /* Compress Buffer List */
     std::vector<std::vector<unsigned char>> obuffer_lists;
-    std::vector<cv::Mat> result_lists;
+    std::vector<cv::Mat> reconstruct_result_lists;
+    std::vector<cv::Mat> decode_result_lists;
+
 
 public:
     NvjpegCompressRunnerImpl() {};
@@ -86,7 +88,9 @@ public:
     void setOptimizedHuffman(bool optimize);
     bool isOptimizedHuffman();
     std::vector<std::vector<unsigned char>> getObufferList();
-    std::vector<cv::Mat> getResultList();
+    std::vector<cv::Mat> getReconstructResultList();
+    std::vector<cv::Mat> getDecodeResultList();
+
 
 private:
     /* Image pre-processing */
@@ -119,4 +123,17 @@ private:
     cv::Mat addImage(cv::Mat image_1 , cv::Mat image_2);
     cv::Mat Binaryfile2Mat(std::string ImagePath);
     std::string nvjpegStatusToString(nvjpegStatus_t status);
+    
+    int writeBMP(const char *filename, const unsigned char *d_chanR, int pitchR,
+                const unsigned char *d_chanG, int pitchG,
+                const unsigned char *d_chanB, int pitchB, int width, int height);
+    
+    int writeBMPi(const char *filename, const unsigned char *d_RGB, int pitch,
+                int width, int height);
+    
+    cv::Mat getCVImage(const unsigned char *d_chanR, int pitchR, \
+                const unsigned char *d_chanG, int pitchG, \
+                const unsigned char *d_chanB, int pitchB, \
+                int width, int height);
+
 };
