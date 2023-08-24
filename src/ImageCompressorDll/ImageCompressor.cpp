@@ -81,7 +81,7 @@ std::vector<cv::Mat> NvjpegCompressRunner::reconstruct(std::vector<std::vector<u
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     std::cout << "[INFO] NvjpegCompressRunner Reconstruct Func Cost Time : " << elapsedTime << " ms" << std::endl;
 
-    return compressor->getResultList();
+    return compressor->getReconstructResultList();
 }
 
 cv::Mat NvjpegCompressRunner::decode(std::vector<unsigned char> obuffer)
@@ -101,11 +101,12 @@ cv::Mat NvjpegCompressRunner::decode(std::vector<unsigned char> obuffer)
 std::vector<cv::Mat> NvjpegCompressRunner::decode(std::vector<std::vector<unsigned char>> obuffer_lists)
 {
     auto startTime = std::chrono::steady_clock::now();
-
+    std::string run_state = compressor->DecodeImage(obuffer_lists) ? "Failure" : "Finish";
     auto endTime = std::chrono::steady_clock::now();
-
+    
+    std::cout << "[INFO] Decode Result : " << run_state << std::endl;
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     std::cout << "[INFO] NvjpegCompressRunner Decode Func Cost Time : " << elapsedTime << " ms" << std::endl;
     
-    return compressor->getResultList();
+    return compressor->getDecodeResultList();
 }
