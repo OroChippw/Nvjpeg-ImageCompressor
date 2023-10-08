@@ -81,6 +81,12 @@ public:
     cv::Mat Decode(std::vector<unsigned char> obuffer);
     int DecodeImage(std::vector<std::vector<unsigned char>> obuffer_lists);
 
+    cv::Mat Decode(cv::Mat image);
+    int DecodeImage(std::vector<cv::Mat> image_lists);
+
+    cv::Mat Decode(FILE *jpeg_file);
+
+
 public:
     void setImageProperties(int width , int height);
     void setEncodeQuality(int quality);
@@ -110,13 +116,11 @@ private:
     /* ******* Use opencv imdecode to decode directly ******* */
     int Reconstructed(std::vector<std::vector<unsigned char>> obuffer_lists);
     cv::Mat ReconstructWorker(const std::vector<unsigned char> obuffer);
+    
     /* ******* Use NvjpegDecoder to decode ******* */
-    // int dev_malloc(void **p, size_t s);
-    // int dev_free(void *p);
-    // int host_malloc(void** p, size_t s, unsigned int f);
-    // int host_free(void* p);
-    int Decode(std::vector<std::vector<unsigned char>> obuffer_lists);
+    int Decode(std::vector<std::vector<unsigned char>> obuffer_lists);    
     cv::Mat DecodeWorker(const std::vector<unsigned char> obuffer);
+    cv::Mat DecodeWorker(FILE *jpeg_file);
 
     /* Other */
     bool cmp(const std::string& str1, const std::string& str2);

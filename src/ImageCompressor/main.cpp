@@ -13,10 +13,9 @@
 
 int main(int argc , char* argv[])
 {
-    std::string input_dirPath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\test\\4K";
-
     int encode_quality = 95; // default value : true
     bool use_optimizedHuffman = true; // default value : true
+
     /* Init compressor properties */ 
     NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
     compressor->init(encode_quality , use_optimizedHuffman);
@@ -24,26 +23,36 @@ int main(int argc , char* argv[])
     /* ************************** */
     /* Single image Samples */
     /* ************************** */
-    std::string input_imagePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\test\\4K\\8-3.png";
-    cv::Mat image = cv::imread(input_imagePath , cv::IMREAD_COLOR);
-
     /* Compress Samples */
+    std::string input_imagePath = "${your compress file}.png";
+    cv::Mat image = cv::imread(input_imagePath , cv::IMREAD_COLOR);
     std::vector<unsigned char> obuffer = compressor->compress(image);
 
-    /* Reconstruct Samples */
-    cv::Mat reconstructResult = compressor->reconstruct(obuffer);
+    /* Save Samples */
+    std::string save_mat = "${your compress result save path}.jpeg";
+    compressor->save(save_mat , obuffer);
 
-    std::string reconstructSavePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result\\reconstruct.png";
-    cv::imwrite(reconstructSavePath , reconstructResult);
+    /* Reconstruct From obuffer Samples */
+    // cv::Mat reconstructResult = compressor->reconstruct(obuffer);
 
-    /* Decode Samples */
+    // std::string reconstructSavePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result\\reconstruct.png";
+    // cv::imwrite(reconstructSavePath , reconstructResult);
+
+    /* Decode From obuffer Samples */
     cv::Mat decodeResult = compressor->decode(obuffer);
-    std::string decodeSavePath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\reconstruct_result\\decode.png";
+    std::string decodeSavePath = "${your decode result save path}.png";
     cv::imwrite(decodeSavePath , decodeResult);
+
+    /* Decode From cv::Mat Samples */
+    cv::Mat decode_mat_result = compressor->decode(save_mat); // 传入的是地址
+    std::string decode_save_mat = "${your decode result save path}.png";
+    cv::imwrite(decode_save_mat , decode_mat_result);
 
     /* ************************** */
     /* ** Batch image Samples *** */
     /* ************************** */
+
+    // std::string input_dirPath = "D:\\OroChiLab\\Nvjpeg-ImageCompressor\\data\\test\\4K";
 
     // std::vector<cv::Mat> image_matlist;
     // std::vector<cv::String> image_filelist;
