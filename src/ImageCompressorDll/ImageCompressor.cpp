@@ -5,6 +5,7 @@
     Description: Implementation of the external wrapper class NvjpegCompressRunner
 *********************************/
 #include <iostream>
+#include <fstream>
 #include <chrono>
 
 #include "ImageCompressor.h"
@@ -98,6 +99,39 @@ cv::Mat NvjpegCompressRunner::decode(std::vector<unsigned char> obuffer)
     return image;
 }
 
+cv::Mat NvjpegCompressRunner::decode(cv::Mat image)
+{
+    auto startTime = std::chrono::steady_clock::now();
+    cv::Mat result = compressor->Decode(image);
+    auto endTime = std::chrono::steady_clock::now();
+
+    std::string run_state = image.empty() ? "Failure" : "Finish";
+    std::cout << "[INFO] Decode Result : " << run_state << std::endl;
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    std::cout << "[INFO] NvjpegCompressRunner Decode Func Cost Time : " << elapsedTime << " ms" << std::endl;
+
+    return result;
+}
+
+cv::Mat NvjpegCompressRunner::decode(std::string image_path)
+{
+    FILE *jpeg_file = fopen(image_path.c_str() , "rb");
+    if (!jpeg_file) {
+        std::cerr << "Failed to open JPEG file." << std::endl;
+        return cv::Mat();
+    }
+    auto startTime = std::chrono::steady_clock::now();
+    cv::Mat result = compressor->Decode(jpeg_file);
+    auto endTime = std::chrono::steady_clock::now();
+
+    std::string run_state = result.empty() ? "Failure" : "Finish";
+    std::cout << "[INFO] Decode Result : " << run_state << std::endl;
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    std::cout << "[INFO] NvjpegCompressRunner Decode Func Cost Time : " << elapsedTime << " ms" << std::endl;
+
+    return result;
+}
+
 std::vector<cv::Mat> NvjpegCompressRunner::decode(std::vector<std::vector<unsigned char>> obuffer_lists)
 {
     auto startTime = std::chrono::steady_clock::now();
@@ -109,4 +143,17 @@ std::vector<cv::Mat> NvjpegCompressRunner::decode(std::vector<std::vector<unsign
     std::cout << "[INFO] NvjpegCompressRunner Decode Func Cost Time : " << elapsedTime << " ms" << std::endl;
     
     return compressor->getDecodeResultList();
+}
+
+void NvjpegCompressRunner::save(std::string save_path , std::vector<unsigned char> obuffer)
+{
+    try 
+    {
+        std::ofstream outputFile(save_path, std::ios::out | std::ios::binary);
+        outputFile.write(reinterpret_cast<const char*>(obuffer.data()), static_cast<int>(obuffer.size()));
+        outputFile.close();
+    } catch(const std::exception& e)
+    {
+        std::cerr << "Exception caught: " << e.what() << std::endl;
+    }
 }

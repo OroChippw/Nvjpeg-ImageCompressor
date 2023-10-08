@@ -37,7 +37,12 @@ public:
     std::vector<cv::Mat> reconstruct(std::vector<std::vector<unsigned char>> obuffer_lists);
     
     cv::Mat decode(std::vector<unsigned char> obuffer);
+    cv::Mat decode(cv::Mat image);
+    cv::Mat decode(std::string image_path);
     std::vector<cv::Mat> decode(std::vector<std::vector<unsigned char>> obuffer_lists);
+
+    void save(std::string save_path , std::vector<unsigned char> obuffer);
+    
 };
 
 #pragma warning(pop)
