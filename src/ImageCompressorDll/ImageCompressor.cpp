@@ -132,6 +132,34 @@ cv::Mat NvjpegCompressRunner::decode(std::string image_path)
     return result;
 }
 
+cv::Mat NvjpegCompressRunner::decode(FILE *jpeg_file)
+{
+    auto startTime = std::chrono::steady_clock::now();
+    cv::Mat result = compressor->Decode(jpeg_file);
+    auto endTime = std::chrono::steady_clock::now();
+
+    std::string run_state = result.empty() ? "Failure" : "Finish";
+    std::cout << "[INFO] Decode Result : " << run_state << std::endl;
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    std::cout << "[INFO] NvjpegCompressRunner Decode Func Cost Time : " << elapsedTime << " ms" << std::endl;
+
+    return result;
+}
+
+cv::Mat NvjpegCompressRunner::decode(FILE *jpeg_file , unsigned char *jpeg_data , size_t jpeg_data_size)
+{
+    auto startTime = std::chrono::steady_clock::now();
+    cv::Mat result = compressor->Decode(jpeg_file , jpeg_data , jpeg_data_size);
+    auto endTime = std::chrono::steady_clock::now();
+
+    std::string run_state = result.empty() ? "Failure" : "Finish";
+    std::cout << "[INFO] Decode Result : " << run_state << std::endl;
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    std::cout << "[INFO] NvjpegCompressRunner Decode Func Cost Time : " << elapsedTime << " ms" << std::endl;
+
+    return result;
+}
+
 std::vector<cv::Mat> NvjpegCompressRunner::decode(std::vector<std::vector<unsigned char>> obuffer_lists)
 {
     auto startTime = std::chrono::steady_clock::now();

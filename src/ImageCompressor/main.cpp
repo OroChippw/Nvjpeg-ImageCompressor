@@ -15,7 +15,7 @@ int main(int argc , char* argv[])
 {
     int encode_quality = 95; // default value : true
     bool use_optimizedHuffman = true; // default value : true
-
+    
     /* Init compressor properties */ 
     NvjpegCompressRunner* compressor = new NvjpegCompressRunner();
     compressor->init(encode_quality , use_optimizedHuffman);
@@ -47,6 +47,8 @@ int main(int argc , char* argv[])
     cv::Mat decode_mat_result = compressor->decode(save_mat); // 传入的是地址
     std::string decode_save_mat = "${your decode result save path}.png";
     cv::imwrite(decode_save_mat , decode_mat_result);
+
+    
 
     /* ************************** */
     /* ** Batch image Samples *** */

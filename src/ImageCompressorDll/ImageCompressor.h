@@ -39,6 +39,10 @@ public:
     cv::Mat decode(std::vector<unsigned char> obuffer);
     cv::Mat decode(cv::Mat image);
     cv::Mat decode(std::string image_path);
+    cv::Mat decode(FILE *jpeg_file);
+    cv::Mat decode(FILE *jpeg_file , unsigned char *jpeg_data , size_t jpeg_data_size);
+
+
     std::vector<cv::Mat> decode(std::vector<std::vector<unsigned char>> obuffer_lists);
 
     void save(std::string save_path , std::vector<unsigned char> obuffer);

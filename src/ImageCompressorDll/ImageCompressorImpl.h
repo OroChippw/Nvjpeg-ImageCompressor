@@ -85,6 +85,7 @@ public:
     int DecodeImage(std::vector<cv::Mat> image_lists);
 
     cv::Mat Decode(FILE *jpeg_file);
+    cv::Mat Decode(FILE *jpeg_file , unsigned char *jpeg_data , size_t jpeg_data_size);
 
 
 public:
@@ -121,6 +122,8 @@ private:
     int Decode(std::vector<std::vector<unsigned char>> obuffer_lists);    
     cv::Mat DecodeWorker(const std::vector<unsigned char> obuffer);
     cv::Mat DecodeWorker(FILE *jpeg_file);
+    cv::Mat DecodeWorker(FILE *jpeg_file , unsigned char *jpeg_data , size_t jpeg_data_size);
+
 
     /* Other */
     bool cmp(const std::string& str1, const std::string& str2);

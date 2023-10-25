@@ -779,6 +779,198 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(FILE *jpeg_file)
     return resultImage;
 }
 
+cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(FILE *jpeg_file , unsigned char *jpeg_data , size_t jpeg_data_size)
+{
+    size_t bytes_read = fread(jpeg_data, 1, jpeg_data_size, jpeg_file);
+    if (bytes_read != jpeg_data_size) {
+        std::cerr << "Failed to read JPEG data." << std::endl;
+        delete[] jpeg_data;
+        return cv::Mat();
+    }
+
+    bool is_interleaved = false;
+    bool hw_decode_available = false;
+    int batch_size = 1;
+
+    nvjpegImage_t nvjpeg_image; // output buffers
+    nvjpegImage_t nvjpeg_output_size;  // output buffer sizes, for convenience
+
+    nvjpegHandle_t nvjpeg_handle;
+    nvjpegJpegState_t nvjpeg_state;
+    nvjpegBufferDevice_t device_buffer;
+
+    nvjpegOutputFormat_t format = NVJPEG_OUTPUT_BGR;
+    nvjpegBackend_t backend = NVJPEG_BACKEND_DEFAULT;
+    nvjpegChromaSubsampling_t subsampling;
+    nvjpegJpegState_t nvjpeg_decoupled_state;
+    nvjpegDecodeParams_t nvjpeg_decode_params;
+    nvjpegJpegDecoder_t nvjpeg_decoder;
+
+    nvjpegBufferPinned_t pinned_buffers[2]; // 2 buffers for pipelining
+    nvjpegJpegStream_t  jpeg_streams[2]; //  2 streams for pipelining
+    int nComponent = 0;
+    int widths[NVJPEG_MAX_COMPONENT];
+    int heights[NVJPEG_MAX_COMPONENT];
+
+    cudaEvent_t ev_start = NULL, ev_end = NULL;
+    CHECK_CUDA(cudaEventCreate(&ev_start));
+    CHECK_CUDA(cudaEventCreate(&ev_end));
+
+    for (int c = 0; c < NVJPEG_MAX_COMPONENT; c++) {
+        nvjpeg_image.channel[c] = NULL;
+        nvjpeg_image.pitch[c] = 0;
+        nvjpeg_output_size.pitch[c] = 0;
+    }
+
+    CHECK_NVJPEG(nvjpegCreate(backend , nullptr , &nvjpeg_handle));
+    CHECK_NVJPEG(nvjpegJpegStateCreate(nvjpeg_handle, &nvjpeg_state));
+
+    CHECK_NVJPEG(nvjpegDecoderCreate(nvjpeg_handle, backend, &nvjpeg_decoder));
+    CHECK_NVJPEG(nvjpegDecoderStateCreate(nvjpeg_handle, nvjpeg_decoder, &nvjpeg_decoupled_state));   
+    CHECK_NVJPEG(nvjpegDecodeParamsCreate(nvjpeg_handle, &nvjpeg_decode_params));
+
+    CHECK_NVJPEG(nvjpegBufferPinnedCreate(nvjpeg_handle, NULL, &pinned_buffers[0]));
+    CHECK_NVJPEG(nvjpegBufferPinnedCreate(nvjpeg_handle, NULL, &pinned_buffers[1]));
+    CHECK_NVJPEG(nvjpegJpegStreamCreate(nvjpeg_handle, &jpeg_streams[0]));
+    CHECK_NVJPEG(nvjpegJpegStreamCreate(nvjpeg_handle, &jpeg_streams[1]));
+    CHECK_NVJPEG(nvjpegBufferDeviceCreate(nvjpeg_handle, NULL, &device_buffer));
+
+    CHECK_NVJPEG(nvjpegGetImageInfo(nvjpeg_handle , jpeg_data , jpeg_data_size , &nComponent , &subsampling , widths , heights));
+    std::cout << "[INFO] NvjpegGetImageInfo Image Channels is " << nComponent << std::endl;
+    // for (int c = 0; c < nComponent; c++) {
+    //     std::cout << "[INFO] Channel #" << c << " size: " << widths[c] << " x " << heights[c] << std::endl;
+    // }
+    // in the case of interleaved RGB output, write only to single channel, but 3 samples at once
+    int mul = 1;
+    if (format == NVJPEG_OUTPUT_RGBI || format == NVJPEG_OUTPUT_BGRI)
+    {
+        nComponent = 1;
+        mul = 3;
+        is_interleaved = true;
+    }else if (format == NVJPEG_OUTPUT_RGB || format == NVJPEG_OUTPUT_BGR) 
+    {
+        widths[1] = widths[2] = widths[0];
+        heights[1] = heights[2] = heights[0];
+        is_interleaved = false;
+    }
+
+    // realloc output buffer if required
+    for (int c = 0; c < nComponent; c++) {
+        int aw = mul * widths[c];
+        int ah = heights[c];
+        int sz = aw * ah;
+        nvjpeg_image.pitch[c] = aw;
+        if (sz > nvjpeg_output_size.pitch[c]) {
+            if (nvjpeg_image.channel[c]) {
+                CHECK_CUDA(cudaFree(nvjpeg_image.channel[c]));
+            }
+            CHECK_CUDA(cudaMalloc((void**)&nvjpeg_image.channel[c], sz));
+            nvjpeg_output_size.pitch[c] = sz;
+        }
+    }
+
+    std::vector<const unsigned char*> batched_bitstreams;
+    std::vector<size_t> batched_bitstreams_size;
+    std::vector<nvjpegImage_t>  batched_output;
+
+    // bit-streams that batched decode cannot handle
+    std::vector<const unsigned char*> otherdecode_bitstreams;
+    std::vector<size_t> otherdecode_bitstreams_size;
+    std::vector<nvjpegImage_t> otherdecode_output;
+
+    if (hw_decode_available)
+    {
+        std::cout << "[INFO] UnSupported hw_decode_available mode" << std::endl;
+    }else
+    {
+        otherdecode_bitstreams.push_back(jpeg_data);
+        otherdecode_bitstreams_size.push_back(jpeg_data_size);
+        otherdecode_output.push_back(nvjpeg_image);
+    }
+
+    CHECK_CUDA(cudaEventRecord(ev_start));
+
+    if(batched_bitstreams.size() > 0)
+    {
+        CHECK_NVJPEG(nvjpegDecodeBatchedInitialize(nvjpeg_handle, nvjpeg_state, \
+                            batched_bitstreams.size(), 1, format));
+
+        CHECK_NVJPEG(nvjpegDecodeBatched(nvjpeg_handle, nvjpeg_state, batched_bitstreams.data(),
+            batched_bitstreams_size.data(), batched_output.data(), NULL));
+    }
+    if(otherdecode_bitstreams.size() > 0)
+    {
+        CHECK_NVJPEG(nvjpegStateAttachDeviceBuffer(nvjpeg_decoupled_state, device_buffer));
+        int buffer_index = 0;
+        CHECK_NVJPEG(nvjpegDecodeParamsSetOutputFormat(nvjpeg_decode_params, format));
+        for (int i = 0; i < batch_size; i++) {
+            CHECK_NVJPEG(nvjpegJpegStreamParse(nvjpeg_handle, otherdecode_bitstreams[i], \
+                            otherdecode_bitstreams_size[i], 0, 0, jpeg_streams[buffer_index]));
+            CHECK_NVJPEG(nvjpegStateAttachPinnedBuffer(nvjpeg_decoupled_state, \
+                            pinned_buffers[buffer_index]));
+            CHECK_NVJPEG(nvjpegDecodeJpegHost(nvjpeg_handle, nvjpeg_decoder, nvjpeg_decoupled_state, \
+                            nvjpeg_decode_params, jpeg_streams[buffer_index]));
+            // CHECK_CUDA(cudaStreamSynchronize(stream));
+            CHECK_NVJPEG(nvjpegDecodeJpegTransferToDevice(nvjpeg_handle, nvjpeg_decoder, \
+                            nvjpeg_decoupled_state , jpeg_streams[buffer_index], NULL));
+            // switch pinned buffer in pipeline mode to avoid an extra sync
+            buffer_index = 1 - buffer_index; 
+
+            CHECK_NVJPEG(nvjpegDecodeJpegDevice(nvjpeg_handle, nvjpeg_decoder, nvjpeg_decoupled_state, \
+                            &otherdecode_output[i], NULL));
+        }
+    }
+
+    CHECK_CUDA(cudaEventRecord(ev_end));
+
+    float ms = 0.0;
+    cudaEventElapsedTime(&ms, ev_start, ev_end);
+    std::cout << "=> Decode Cost time : " << ms << "ms" << std::endl;
+    cv::Mat resultImage;
+    for (int i = 0; i < batch_size; i++) {
+        if (nvjpeg_image.channel[0] != nullptr)
+        {
+            /*
+                nvjpeg_image.channel数组的通道顺序与OpenCV相反，它采用的是RG（红绿蓝）的顺序
+            */
+            cv::Mat decodedImage = getCVImage(nvjpeg_image.channel[0], nvjpeg_image.pitch[0], \
+                                            nvjpeg_image.channel[1], nvjpeg_image.pitch[1], \
+                                            nvjpeg_image.channel[2], nvjpeg_image.pitch[2], widths[i], heights[i]);
+            if (decodedImage.empty())
+            {
+                std::cout << "[ERROR] DecodedImage is empty" << std::endl;
+                break;
+            }
+            resultImage = decodedImage.clone();
+
+        }else
+        {
+            std::cerr << "[ERROR] JPEG decode failed: Output image channel is null." << std::endl;
+        }
+    }
+
+    CHECK_NVJPEG(nvjpegJpegStateDestroy(nvjpeg_decoupled_state));  
+    CHECK_NVJPEG(nvjpegDecoderDestroy(nvjpeg_decoder));
+    CHECK_NVJPEG(nvjpegDecoderCreate(nvjpeg_handle, NVJPEG_BACKEND_DEFAULT, &nvjpeg_decoder));
+    CHECK_NVJPEG(nvjpegDecodeParamsDestroy(nvjpeg_decode_params));
+
+    CHECK_NVJPEG(nvjpegJpegStreamDestroy(jpeg_streams[0]));
+    CHECK_NVJPEG(nvjpegJpegStreamDestroy(jpeg_streams[1]));
+    CHECK_NVJPEG(nvjpegBufferPinnedDestroy(pinned_buffers[0]));
+    CHECK_NVJPEG(nvjpegBufferPinnedDestroy(pinned_buffers[1]));
+    CHECK_NVJPEG(nvjpegBufferDeviceDestroy(device_buffer));
+
+    for (int c = 0; c < NVJPEG_MAX_COMPONENT; c++)
+    {
+      if (nvjpeg_image.channel[c]) {CHECK_CUDA(cudaFree(nvjpeg_image.channel[c]))};
+    }
+
+    CHECK_NVJPEG(nvjpegJpegStateDestroy(nvjpeg_state));
+    CHECK_NVJPEG(nvjpegDestroy(nvjpeg_handle));
+    
+    return resultImage;
+}
+
 cv::Mat NvjpegCompressRunnerImpl::Decode(std::vector<unsigned char> obuffer)
 {
     cv::Mat image;
@@ -815,6 +1007,21 @@ cv::Mat NvjpegCompressRunnerImpl::Decode(FILE *jpeg_file)
     try
     {
         result = DecodeWorker(jpeg_file);
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << "[ERROR] Exception caught : " << e.what() << '\n';
+    }
+
+    return result;
+}
+
+cv::Mat NvjpegCompressRunnerImpl::Decode(FILE *jpeg_file , unsigned char *jpeg_data , size_t jpeg_data_size)
+{
+    cv::Mat result;
+    try
+    {
+        result = DecodeWorker(jpeg_file , jpeg_data , jpeg_data_size);
     }
     catch(const std::exception& e)
     {
