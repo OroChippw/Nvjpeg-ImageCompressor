@@ -1,0 +1,1 @@
+nvprof --print-gpu-summary --print-summary .\build\Release\demo.exe
