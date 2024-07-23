@@ -42,33 +42,45 @@ NvjpegCompressRunner::~NvjpegCompressRunner()
     std::cout << "[INFO] Delete NvjpegCompressRunnerImpl Successfully ..." << std::endl;
 }
 
-std::vector<unsigned char> NvjpegCompressRunner::compress(cv::Mat image)
+std::vector<unsigned char> NvjpegCompressRunner::compress(cv::Mat image , int* run_state)
 {
     auto startTime = std::chrono::steady_clock::now();
     auto obuffer = compressor->Compress(image);
     auto endTime = std::chrono::steady_clock::now();
 
-    std::string run_state = obuffer.empty() ? "Failure" : "Finish";
-    std::cout << "[INFO] Compress Result : " << run_state << std::endl;
+    if (run_state) {
+        *run_state = obuffer.empty() ? 0 : 1;
+    }
+
+    // std::string state_msg  = obuffer.empty() ? "Failure" : "Finish";
+    // std::cout << "[INFO] Compress Result : " << state_msg  << std::endl;
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     std::cout << "[INFO] NvjpegCompressRunner Compress Func Cost Time : " << elapsedTime << " ms" << std::endl;
     
     return obuffer;
 }
 
-cv::Mat NvjpegCompressRunner::decode(std::string image_path)
+cv::Mat NvjpegCompressRunner::decode(std::string image_path , int* run_state)
 {
     FILE *jpeg_file;
     if (fopen_s(&jpeg_file, image_path.c_str(), "rb") != 0) {
         std::cerr << "Failed to open JPEG file." << std::endl;
+        if (run_state) {
+            *run_state = 0;
+        }
         return cv::Mat();
     }
+
     auto startTime = std::chrono::steady_clock::now();
     cv::Mat result = compressor->Decode(jpeg_file);
     auto endTime = std::chrono::steady_clock::now();
 
-    std::string run_state = result.empty() ? "Failure" : "Finish";
-    std::cout << "[INFO] Decode Result : " << run_state << std::endl;
+     if (run_state) {
+        *run_state = result.empty() ? 0 : 1;
+    }
+
+    // std::string state_msg  = result.empty() ? "Failure" : "Finish";
+    // std::cout << "[INFO] Decode Result : " << state_msg  << std::endl;
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     std::cout << "[INFO] NvjpegCompressRunner Decode Func Cost Time : " << elapsedTime << " ms" << std::endl;
 

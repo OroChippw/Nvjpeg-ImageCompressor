@@ -27,8 +27,12 @@ public:
     NvjpegCompressRunner(int width=8320 , int height=40000 , int quality=95 , bool optimize=true);
     ~NvjpegCompressRunner();
 
-    std::vector<unsigned char> compress(cv::Mat image);
-    cv::Mat decode(std::string image_path);
+    // Disable copy constructor and copy assignment operator
+    NvjpegCompressRunner(const NvjpegCompressRunner&) = delete;
+    NvjpegCompressRunner& operator=(const NvjpegCompressRunner&) = delete;
+
+    std::vector<unsigned char> compress(cv::Mat image , int* run_state);
+    cv::Mat decode(std::string image_path , int* run_state);
     void save(std::string save_path , std::vector<unsigned char> obuffer);
 
     void buildCompressEnv();

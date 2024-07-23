@@ -79,6 +79,13 @@ class NvjpegCompressRunnerImpl
     public:
         NvjpegCompressRunnerImpl(int width , int height , int quality , bool optimize);
         ~NvjpegCompressRunnerImpl();
+
+        NvjpegCompressRunnerImpl(const NvjpegCompressRunnerImpl&) = delete;
+        NvjpegCompressRunnerImpl& operator=(const NvjpegCompressRunnerImpl&) = delete;
+
+        // 移动构造函数和赋值运算符
+        NvjpegCompressRunnerImpl(NvjpegCompressRunnerImpl&&) = default;
+        NvjpegCompressRunnerImpl& operator=(NvjpegCompressRunnerImpl&&) = default;
     
     public:
         void setImageProperties(int width , int height);
