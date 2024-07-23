@@ -4,6 +4,7 @@
     Date: 2024.07.17
     Description: Define each module of NvjpegCompressRunnerImpl
 */
+#pragma warning(disable:4819)
 
 #include <chrono>
 #include <vector>
@@ -17,7 +18,7 @@
 
 void NvjpegCompressRunnerImpl::initCompressEnv()
 {
-    auto startTime = std::chrono::steady_clock::now();
+    // auto startTime = std::chrono::steady_clock::now();
     CHECK_NVJPEG(nvjpegCreate(backend, nullptr, &nvjpeg_handle_compress));
     CHECK_NVJPEG(nvjpegEncoderParamsCreate(nvjpeg_handle_compress, &encoder_params, NULL));
     CHECK_NVJPEG(nvjpegEncoderStateCreate(nvjpeg_handle_compress, &encoder_state, NULL));
@@ -37,15 +38,15 @@ void NvjpegCompressRunnerImpl::initCompressEnv()
 
     compress_init = true;
 
-    auto endTime = std::chrono::steady_clock::now();
-    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    // auto endTime = std::chrono::steady_clock::now();
+    // auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
-    std::cout << "[INFO] Init Compress Env Successfully Cost Time : " << elapsedTime << " ms" << std::endl;
+    // std::cout << "[INFO] Init Compress Env Successfully Cost Time : " << elapsedTime << " ms" << std::endl;
 }
 
 void NvjpegCompressRunnerImpl::destoryCompressEnv()
 {
-    auto startTime = std::chrono::steady_clock::now();
+    // auto startTime = std::chrono::steady_clock::now();
     CHECK_NVJPEG(nvjpegEncoderParamsDestroy(encoder_params));
     CHECK_NVJPEG(nvjpegEncoderStateDestroy(encoder_state));
     CHECK_NVJPEG(nvjpegDestroy(nvjpeg_handle_compress));
@@ -58,14 +59,14 @@ void NvjpegCompressRunnerImpl::destoryCompressEnv()
 
     compress_init = false;
 
-    auto endTime = std::chrono::steady_clock::now();
-    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    std::cout << "[INFO] Destory Compress Env Successfully Cost Time : " << elapsedTime << " ms" << std::endl;
+    // auto endTime = std::chrono::steady_clock::now();
+    // auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    // std::cout << "[INFO] Destory Compress Env Successfully Cost Time : " << elapsedTime << " ms" << std::endl;
 }
 
 void NvjpegCompressRunnerImpl::initDecodeEnv()
 {
-    auto startTime = std::chrono::steady_clock::now();
+    // auto startTime = std::chrono::steady_clock::now();
 
     CHECK_NVJPEG(nvjpegCreate(backend, nullptr, &nvjpeg_handle_decode));
     CHECK_NVJPEG(nvjpegJpegStateCreate(nvjpeg_handle_decode, &nvjpeg_state));
@@ -88,14 +89,14 @@ void NvjpegCompressRunnerImpl::initDecodeEnv()
     }
 
     decode_init = true;
-    auto endTime = std::chrono::steady_clock::now();
-    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    std::cout << "[INFO] Init Decode Env Successfully Cost Time : " << elapsedTime << " ms" << std::endl;
+//     auto endTime = std::chrono::steady_clock::now();
+//     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+//     std::cout << "[INFO] Init Decode Env Successfully Cost Time : " << elapsedTime << " ms" << std::endl;
 }
 
 void NvjpegCompressRunnerImpl::destoryDecodeEnv()
 {
-    auto startTime = std::chrono::steady_clock::now();
+    // auto startTime = std::chrono::steady_clock::now();
 
     CHECK_NVJPEG(nvjpegJpegStateDestroy(nvjpeg_decoupled_state));
     CHECK_NVJPEG(nvjpegDecoderDestroy(nvjpeg_decoder));
@@ -110,9 +111,9 @@ void NvjpegCompressRunnerImpl::destoryDecodeEnv()
     CHECK_CUDA(cudaEventDestroy(decode_ev_end));
 
     decode_init = false;
-    auto endTime = std::chrono::steady_clock::now();
-    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    std::cout << "[INFO] Destory Destory Env Successfully Cost Time : " << elapsedTime << " ms" << std::endl;
+    // auto endTime = std::chrono::steady_clock::now();
+    // auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    // std::cout << "[INFO] Destory Destory Env Successfully Cost Time : " << elapsedTime << " ms" << std::endl;
 }
 
 NvjpegCompressRunnerImpl::NvjpegCompressRunnerImpl(int width , int height , int quality , bool optimize)
@@ -251,7 +252,6 @@ cv::Mat NvjpegCompressRunnerImpl::getCVImageOnGPU(const unsigned char *d_chanB, 
     combineChannels<<<gridSize, blockSize>>>(d_dst, width, height, pitch, (unsigned char*)d_chanR, (unsigned char*)d_chanG, (unsigned char*)d_chanB);
     CHECK_CUDA(cudaDeviceSynchronize());
 
-    // 分配主机内存
     std::vector<unsigned char> h_dst(width * height * 3);
     unsigned char* h_dst_ptr = h_dst.data();
 
@@ -356,7 +356,7 @@ cv::Mat NvjpegCompressRunnerImpl::DecodeWorker(FILE *jpeg_file)
 
     cudaStream_t stream;
     CHECK_CUDA(cudaStreamCreate(&stream));
-    CHECK_CUDA(cudaEventRecord(decode_ev_start , stream));
+    // CHECK_CUDA(cudaEventRecord(decode_ev_start , stream));
 
     CHECK_NVJPEG(nvjpegStateAttachDeviceBuffer(nvjpeg_decoupled_state, device_buffer));
     CHECK_NVJPEG(nvjpegJpegStreamParse(nvjpeg_handle_decode, jpeg_data.data(), jpeg_data_size, 0, 0, jpeg_streams[0]));
